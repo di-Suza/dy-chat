@@ -3,8 +3,12 @@ import {
   loginUser,
   logoutAllSessions,
   logoutSession,
+  removeUserAvatar,
   refreshAuthSession,
-  registerUser
+  registerUser,
+  updateUserAvatar,
+  updateUserPassword,
+  updateUserProfile
 } from "../services/auth.service.js";
 import { clearAuthCookies, setAuthCookies } from "../utils/cookies.js";
 import { serializeUser } from "../utils/serializeUser.js";
@@ -70,6 +74,62 @@ export const getMe = async (req, res) => {
   res.json({
     status: true,
     user: serializeUser(req.user)
+  });
+};
+
+// Updates editable profile fields for the authenticated user.
+export const updateProfile = async (req, res) => {
+  const result = await updateUserProfile({
+    name: req.body.name,
+    userId: req.user._id
+  });
+
+  res.json({
+    status: true,
+    message: "Profile updated successfully",
+    user: result.user
+  });
+};
+
+// Updates password after verifying the current password.
+export const updatePassword = async (req, res) => {
+  const result = await updateUserPassword({
+    currentPassword: req.body.currentPassword,
+    newPassword: req.body.newPassword,
+    userId: req.user._id
+  });
+
+  res.json({
+    status: true,
+    message: "Password updated successfully",
+    user: result.user
+  });
+};
+
+// Uploads/replaces the authenticated user's profile picture from multipart form data.
+export const updateAvatar = async (req, res) => {
+  const result = await updateUserAvatar({
+    file: req.file,
+    userId: req.user._id
+  });
+
+  res.json({
+    status: true,
+    message: "Profile picture updated successfully",
+    user: result.user
+  });
+};
+
+// Removes the authenticated user's profile picture from ImageKit and the user document.
+export const removeAvatar = async (req, res) => {
+  const result = await removeUserAvatar({
+    userId: req.user._id
+  });
+
+  res.json({
+    status: true,
+    message: "Profile picture removed successfully",
+    user: result.user
   });
 };
 

@@ -6,13 +6,20 @@ import {
   logout,
   logoutAll,
   refresh,
-  register
+  register,
+  removeAvatar,
+  updateAvatar,
+  updatePassword,
+  updateProfile
 } from "../controllers/auth.controller.js";
 import { authenticate } from "../middlewares/authenticate.js";
+import { uploadProfileImage } from "../middlewares/uploadImage.js";
 import { validateRequest } from "../middlewares/validateRequest.js";
 import {
   loginValidation,
-  registerValidation
+  registerValidation,
+  updatePasswordValidation,
+  updateProfileValidation
 } from "../validations/auth.validation.js";
 
 // Auth router groups all cookie-based authentication endpoints under /api/auth.
@@ -29,6 +36,30 @@ authRoutes.post("/refresh", refresh);
 
 // Returns the current authenticated user.
 authRoutes.get("/me", authenticate, getMe);
+
+// Updates the authenticated user's editable profile fields.
+authRoutes.patch(
+  "/profile",
+  authenticate,
+  updateProfileValidation,
+  validateRequest,
+  updateProfile
+);
+
+// Updates the authenticated user's password using the current password.
+authRoutes.patch(
+  "/password",
+  authenticate,
+  updatePasswordValidation,
+  validateRequest,
+  updatePassword
+);
+
+// Uploads or replaces the authenticated user's profile picture.
+authRoutes.patch("/avatar", authenticate, uploadProfileImage, updateAvatar);
+
+// Removes the authenticated user's profile picture.
+authRoutes.delete("/avatar", authenticate, removeAvatar);
 
 // Logs out only the browser/device represented by the current refresh cookie.
 authRoutes.post("/logout", authenticate, logout);
