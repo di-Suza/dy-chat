@@ -33,3 +33,25 @@ export const loginValidation = [
     .normalizeEmail(),
   body("password").notEmpty().withMessage("Password is required")
 ];
+
+// Validation chain for updating the current user's editable profile fields.
+export const updateProfileValidation = [
+  body("name")
+    .trim()
+    .notEmpty()
+    .withMessage("Name is required")
+    .isLength({ min: 2, max: 80 })
+    .withMessage("Name must be between 2 and 80 characters")
+];
+
+// Validation chain for current-password based password changes.
+export const updatePasswordValidation = [
+  body("currentPassword")
+    .notEmpty()
+    .withMessage("Current password is required"),
+  body("newPassword")
+    .notEmpty()
+    .withMessage("New password is required")
+    .isLength({ min: 6 })
+    .withMessage("New password must be at least 6 characters")
+];

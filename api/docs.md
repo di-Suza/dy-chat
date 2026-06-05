@@ -12,10 +12,15 @@ Backend ka current goal authentication ko complete banana hai:
 - Refresh session
 - Logout current session
 - Logout all devices
+- Update profile name
+- Update password with current password
+- Update/remove profile picture
 - HTTP-only cookie auth
 - RS256 JWT signing
 - MongoDB session tracking
 - Redis token blacklist
+- ImageKit media storage
+- Multer multipart image upload
 - Global error handling
 
 Socket auth abhi intentionally add nahi kiya gaya. Wo later phase me hoga.
@@ -30,6 +35,8 @@ Socket auth abhi intentionally add nahi kiya gaya. Wo later phase me hoga.
 - RS256 private/public key cryptography
 - HTTP-only cookies
 - express-validator
+- Multer
+- ImageKit
 - Socket.IO base server
 
 ## Important Auth Rule
@@ -69,6 +76,9 @@ ACCESS_TOKEN_COOKIE_NAME=dychat_access
 REFRESH_TOKEN_COOKIE_NAME=dychat_refresh
 COOKIE_SECURE=false
 COOKIE_SAME_SITE=lax
+IMAGE_KIT_PRIVATE=
+IMAGE_KIT_PUBLIC=
+IMAGE_KIT_URL_ENDPOINT=
 ```
 
 ## RS256 Key Setup
@@ -119,6 +129,7 @@ api/src/
   config/
     database.js
     env.js
+    imageKit.js
     jwtKeys.js
     redis.js
   controllers/
@@ -128,6 +139,7 @@ api/src/
   middlewares/
     authenticate.js
     errorHandler.js
+    uploadImage.js
     validateRequest.js
   models/
     RefreshSession.js
@@ -136,6 +148,7 @@ api/src/
     auth.routes.js
   services/
     auth.service.js
+    imageKit.service.js
     tokenBlacklist.service.js
   utils/
     ApiError.js
@@ -225,6 +238,7 @@ It reads:
 - JWT key base64 values
 - token expiry settings
 - cookie names/settings
+- ImageKit private key/public key/url endpoint
 
 Function:
 
@@ -269,6 +283,25 @@ Purpose:
 - Connects Redis on server boot.
 - Logs Redis errors.
 - If Redis unavailable, app can still use in-memory blacklist fallback in development.
+
+### `imageKit.js`
+
+File:
+
+```txt
+api/src/config/imageKit.js
+```
+
+Exports:
+
+- `isImageKitConfigured`
+- `imageKit`
+
+Purpose:
+
+- Creates one shared ImageKit SDK client.
+- Uses `IMAGE_KIT_PRIVATE`, `IMAGE_KIT_PUBLIC`, and `IMAGE_KIT_URL_ENDPOINT`.
+- Gives upload/delete services a clear configured/not-configured guard.
 
 ### `jwtKeys.js`
 
@@ -320,12 +353,14 @@ Purpose:
 
 - Stores account identity.
 - Stores password hash, not raw password.
+- Stores profile picture URL and ImageKit file id.
 - Keeps future chat fields like online status and last seen.
 
 Important:
 
 - `passwordHash` has `select: false`, so normal user queries do not return it.
 - Login explicitly uses `.select("+passwordHash")`.
+- `avatar.publicId` stores ImageKit's `fileId`; field name is kept generic for app code.
 
 ### RefreshSession Model
 
@@ -600,6 +635,33 @@ TTL:
 
 - TTL is calculated until token's original expiry.
 
+### imageKit.service.js
+
+File:
+
+```txt
+api/src/services/imageKit.service.js
+```
+
+Private helpers:
+
+- `getImageKitErrorMessage(error, fallback)`
+- `assertImageKitConfigured()`
+- `createProfileFileName({ file, userId })`
+
+Exported services:
+
+- `uploadProfileImageToImageKit({ file, userId })`
+- `deleteImageKitFile(publicId)`
+
+Purpose:
+
+- Converts multer's in-memory image buffer into a base64 data URL.
+- Uploads the image into `/dychat/profile-pictures` folder on ImageKit.
+- Returns `{ url, publicId }`, where `publicId` is ImageKit's `fileId`.
+- Deletes old/removed ImageKit files by file id.
+- Converts ImageKit SDK failures into API errors.
+
 ### auth.service.js
 
 File:
@@ -620,6 +682,10 @@ Exported services:
 - `registerUser({ email, name, password }, meta)`
 - `loginUser({ email, password }, meta)`
 - `refreshAuthSession(refreshTokenValue, meta)`
+- `updateUserProfile({ name, userId })`
+- `updateUserPassword({ currentPassword, newPassword, userId })`
+- `updateUserAvatar({ file, userId })`
+- `removeUserAvatar({ userId })`
 - `logoutSession({ accessExpiresAt, accessJti, refreshTokenValue, sessionId, userId })`
 - `logoutAllSessions({ accessExpiresAt, accessJti, userId })`
 
@@ -702,6 +768,57 @@ Important:
 - Access token rotates on refresh.
 - Session keeps only latest access token JTI.
 
+#### updateUserProfile
+
+Flow:
+
+1. Load authenticated user.
+2. Update only `name`.
+3. Save user.
+4. Return serialized user.
+
+Email is intentionally immutable in this API.
+
+#### updateUserPassword
+
+Flow:
+
+1. Load authenticated user with `+passwordHash`.
+2. Compare `currentPassword` with stored hash.
+3. Reject invalid current password.
+4. Reject same password reuse.
+5. Hash `newPassword`.
+6. Save user.
+7. Return serialized user.
+
+#### updateUserAvatar
+
+Flow:
+
+1. Ensure multipart image file exists.
+2. Load authenticated user.
+3. Store old avatar ImageKit file id.
+4. Upload new image to ImageKit through `imageKit.service.js`.
+5. Save new `avatar.url` and `avatar.publicId` on user.
+6. Try to delete old ImageKit file after new avatar is saved.
+7. Return serialized user.
+
+Important:
+
+- Upload field name is `avatar`.
+- Allowed file types are JPG, PNG, and WEBP.
+- Max upload size is 5MB.
+
+#### removeUserAvatar
+
+Flow:
+
+1. Load authenticated user.
+2. If user has `avatar.publicId`, delete that file from ImageKit.
+3. Clear `avatar.url` and `avatar.publicId` in user document.
+4. Save user.
+5. Return serialized user.
+
 #### logoutSession
 
 Flow:
@@ -740,6 +857,16 @@ Purpose:
 
 - Protect private routes.
 
+Used by:
+
+- `GET /api/auth/me`
+- `PATCH /api/auth/profile`
+- `PATCH /api/auth/password`
+- `PATCH /api/auth/avatar`
+- `DELETE /api/auth/avatar`
+- `POST /api/auth/logout`
+- `POST /api/auth/logout-all`
+
 Flow:
 
 1. Read access token cookie.
@@ -760,6 +887,26 @@ Rejects when:
 - Session deleted.
 - Access token is no longer latest for session.
 - User deleted.
+
+### uploadImage.js
+
+File:
+
+```txt
+api/src/middlewares/uploadImage.js
+```
+
+Export:
+
+- `uploadProfileImage`
+
+Purpose:
+
+- Accepts one multipart file field named `avatar`.
+- Uses multer memory storage, so no temporary local files are written.
+- Allows only `image/jpeg`, `image/png`, and `image/webp`.
+- Rejects files larger than 5MB.
+- Places the accepted file on `req.file` for the avatar controller.
 
 ### validateRequest.js
 
@@ -805,6 +952,7 @@ Handles:
 - `ApiError`
 - Mongoose validation error
 - Mongoose cast error
+- Multer file upload error
 - duplicate key error
 - unknown error
 
@@ -828,6 +976,11 @@ Development:
 
 - Includes stack for debugging.
 
+Logging rule:
+
+- Expected operational 4xx errors like missing access/refresh cookies are returned to the client but not printed as stack traces.
+- 5xx or non-operational errors are still logged.
+
 ## Validations
 
 File:
@@ -840,6 +993,8 @@ Exports:
 
 - `registerValidation`
 - `loginValidation`
+- `updateProfileValidation`
+- `updatePasswordValidation`
 
 ### registerValidation
 
@@ -855,6 +1010,21 @@ Validates:
 
 - `email`: required, valid email, normalized
 - `password`: required
+
+### updateProfileValidation
+
+Validates:
+
+- `name`: required, 2-80 chars
+
+Email is not validated because this route does not allow email changes.
+
+### updatePasswordValidation
+
+Validates:
+
+- `currentPassword`: required
+- `newPassword`: required, min 6 chars
 
 ## Controllers
 
@@ -874,6 +1044,10 @@ Controllers:
 - `login(req, res)`
 - `refresh(req, res)`
 - `getMe(req, res)`
+- `updateProfile(req, res)`
+- `updatePassword(req, res)`
+- `updateAvatar(req, res)`
+- `removeAvatar(req, res)`
 - `logout(req, res)`
 - `logoutAll(req, res)`
 
@@ -927,6 +1101,41 @@ Flow:
 1. Uses `req.user` from `authenticate`.
 2. Serializes user.
 3. Returns user.
+
+### updateProfile
+
+Flow:
+
+1. Uses `req.user` from `authenticate`.
+2. Reads validated `name`.
+3. Calls `updateUserProfile`.
+4. Returns updated user.
+
+### updatePassword
+
+Flow:
+
+1. Uses `req.user` from `authenticate`.
+2. Reads `currentPassword` and `newPassword`.
+3. Calls `updateUserPassword`.
+4. Returns updated user.
+
+### updateAvatar
+
+Flow:
+
+1. Uses `req.user` from `authenticate`.
+2. Reads `req.file` from multer's `uploadProfileImage`.
+3. Calls `updateUserAvatar`.
+4. Returns updated user.
+
+### removeAvatar
+
+Flow:
+
+1. Uses `req.user` from `authenticate`.
+2. Calls `removeUserAvatar`.
+3. Returns updated user with empty avatar fields.
 
 ### logout
 
@@ -1083,6 +1292,129 @@ Response:
 }
 ```
 
+### PATCH /api/auth/profile
+
+Middleware:
+
+- `authenticate`
+- `updateProfileValidation`
+- `validateRequest`
+
+Controller:
+
+- `updateProfile`
+
+Request:
+
+```js
+{
+  name
+}
+```
+
+Response:
+
+```js
+{
+  status: true,
+  message: "Profile updated successfully",
+  user
+}
+```
+
+### PATCH /api/auth/password
+
+Middleware:
+
+- `authenticate`
+- `updatePasswordValidation`
+- `validateRequest`
+
+Controller:
+
+- `updatePassword`
+
+Request:
+
+```js
+{
+  currentPassword,
+  newPassword
+}
+```
+
+Response:
+
+```js
+{
+  status: true,
+  message: "Password updated successfully",
+  user
+}
+```
+
+### PATCH /api/auth/avatar
+
+Middleware:
+
+- `authenticate`
+- `uploadProfileImage`
+
+Controller:
+
+- `updateAvatar`
+
+Request:
+
+- access cookie
+- multipart form data
+- file field name: `avatar`
+
+Response:
+
+```js
+{
+  status: true,
+  message: "Profile picture updated successfully",
+  user
+}
+```
+
+Side effects:
+
+- uploads new image to ImageKit
+- saves `avatar.url` and ImageKit `fileId`
+- deletes previous ImageKit file when one exists
+
+### DELETE /api/auth/avatar
+
+Middleware:
+
+- `authenticate`
+
+Controller:
+
+- `removeAvatar`
+
+Request:
+
+- access cookie
+
+Response:
+
+```js
+{
+  status: true,
+  message: "Profile picture removed successfully",
+  user
+}
+```
+
+Side effects:
+
+- deletes current ImageKit file when one exists
+- clears `avatar.url` and `avatar.publicId`
+
 ### POST /api/auth/logout
 
 Middleware:
@@ -1191,6 +1523,51 @@ Side effects:
 5. `authenticate` checks session and latest access JTI.
 6. Controller runs.
 
+### Profile Update Flow
+
+1. User opens profile modal.
+2. User edits name.
+3. Frontend calls `PATCH /auth/profile`.
+4. Backend authenticates access cookie.
+5. Backend validates name.
+6. Backend updates only `name`.
+7. Frontend receives updated user.
+8. Auth slice stores updated user.
+
+### Password Update Flow
+
+1. User opens profile modal.
+2. User enters current password and new password.
+3. Frontend calls `PATCH /auth/password`.
+4. Backend authenticates access cookie.
+5. Backend validates body.
+6. Backend verifies current password.
+7. Backend hashes and saves new password.
+8. Frontend shows success state.
+
+### Profile Picture Update Flow
+
+1. User opens profile modal.
+2. User selects an image.
+3. Frontend creates `FormData` and appends file under `avatar`.
+4. Frontend calls `PATCH /auth/avatar`.
+5. Backend authenticates access cookie.
+6. Multer validates image type and file size.
+7. Backend uploads the image buffer to ImageKit.
+8. Backend saves ImageKit URL and file id on `user.avatar`.
+9. Backend deletes old ImageKit file if user already had one.
+10. Frontend receives updated user and auth slice updates avatar everywhere.
+
+### Profile Picture Remove Flow
+
+1. User opens profile modal.
+2. User clicks remove.
+3. Frontend calls `DELETE /auth/avatar`.
+4. Backend authenticates access cookie.
+5. Backend deletes current ImageKit file when `avatar.publicId` exists.
+6. Backend clears `avatar.url` and `avatar.publicId`.
+7. Frontend receives updated user and shows fallback avatar.
+
 ### Refresh Flow
 
 1. Protected API returns `401`.
@@ -1236,6 +1613,9 @@ Side effects:
 - Latest access JTI check invalidates previous access token after refresh.
 - Logout-all deletes all refresh sessions.
 - Redis should be used in production for persistent blacklist behavior.
+- Profile picture uploads accept only JPG, PNG, and WEBP.
+- Profile picture uploads are limited to 5MB.
+- Uploaded files go directly from memory buffer to ImageKit; no local temp image files are saved.
 
 ## Current Limitations
 
@@ -1244,6 +1624,7 @@ Side effects:
 - Socket authentication is not added yet.
 - Rate limiting is not added yet.
 - Email verification is not added yet.
+- ImageKit credentials must be configured before avatar upload/remove can work.
 
 ## Verification Commands
 

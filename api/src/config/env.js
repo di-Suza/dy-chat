@@ -26,5 +26,11 @@ export const env = {
   refreshTokenCookieName:
     process.env.REFRESH_TOKEN_COOKIE_NAME || "dychat_refresh",
   cookieSecure: toBoolean(process.env.COOKIE_SECURE, false),
-  cookieSameSite: process.env.COOKIE_SAME_SITE || "lax"
+  cookieSameSite: process.env.COOKIE_SAME_SITE || "lax",
+  imageKitPrivateKey:
+    process.env.IMAGE_KIT_PRIVATE || process.env.IMAGEKIT_PRIVATE_KEY || "",
+  imageKitPublicKey:
+    process.env.IMAGE_KIT_PUBLIC || process.env.IMAGEKIT_PUBLIC_KEY || "",
+  imageKitUrlEndpoint:
+    process.env.IMAGE_KIT_URL_ENDPOINT || process.env.IMAGEKIT_URL_ENDPOINT || ""
 };

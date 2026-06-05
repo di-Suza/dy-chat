@@ -15,6 +15,10 @@ import {
   blacklistTokenJti,
   isTokenJtiBlacklisted
 } from "./tokenBlacklist.service.js";
+import {
+  deleteImageKitFile,
+  uploadProfileImageToImageKit
+} from "./imageKit.service.js";
 
 const passwordSaltRounds = 12;
 
@@ -197,6 +201,102 @@ export const refreshAuthSession = async (refreshTokenValue, meta) => {
 
   return {
     accessToken,
+    user: serializeUser(user)
+  };
+};
+
+// Updates editable profile fields while keeping email immutable.
+export const updateUserProfile = async ({ name, userId }) => {
+  const user = await getUserOrThrow(userId);
+
+  user.name = name;
+  await user.save();
+
+  return {
+    user: serializeUser(user)
+  };
+};
+
+// Updates password only after the current password proves account ownership.
+export const updateUserPassword = async ({
+  currentPassword,
+  newPassword,
+  userId
+}) => {
+  const user = await User.findById(userId).select("+passwordHash");
+
+  if (!user) {
+    throw new ApiError(401, "User no longer exists");
+  }
+
+  const isCurrentPasswordValid = await bcrypt.compare(
+    currentPassword,
+    user.passwordHash
+  );
+
+  if (!isCurrentPasswordValid) {
+    throw new ApiError(401, "Current password is incorrect");
+  }
+
+  const isSamePassword = await bcrypt.compare(newPassword, user.passwordHash);
+
+  if (isSamePassword) {
+    throw new ApiError(400, "New password must be different");
+  }
+
+  user.passwordHash = await bcrypt.hash(newPassword, passwordSaltRounds);
+  await user.save();
+
+  return {
+    user: serializeUser(user)
+  };
+};
+
+// Replaces the authenticated user's profile picture and cleans up the old ImageKit file.
+export const updateUserAvatar = async ({ file, userId }) => {
+  if (!file) {
+    throw new ApiError(400, "Profile image is required");
+  }
+
+  const user = await getUserOrThrow(userId);
+  const oldAvatarPublicId = user.avatar?.publicId;
+  const avatar = await uploadProfileImageToImageKit({
+    file,
+    userId
+  });
+
+  user.avatar = avatar;
+  await user.save();
+
+  if (oldAvatarPublicId) {
+    try {
+      await deleteImageKitFile(oldAvatarPublicId);
+    } catch (error) {
+      console.warn("Old profile image cleanup failed:", error.message);
+    }
+  }
+
+  return {
+    user: serializeUser(user)
+  };
+};
+
+// Removes the authenticated user's profile picture from ImageKit and clears user avatar fields.
+export const removeUserAvatar = async ({ userId }) => {
+  const user = await getUserOrThrow(userId);
+  const oldAvatarPublicId = user.avatar?.publicId;
+
+  if (oldAvatarPublicId) {
+    await deleteImageKitFile(oldAvatarPublicId);
+  }
+
+  user.avatar = {
+    publicId: "",
+    url: ""
+  };
+  await user.save();
+
+  return {
     user: serializeUser(user)
   };
 };

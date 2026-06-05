@@ -50,6 +50,26 @@ const authSlice = createSlice({
         state.user = getUserFromPayload(action.payload);
         state.isLoggedOut = false;
       })
+      .addMatcher(authApi.endpoints.updateProfile.matchFulfilled, (state, action) => {
+        state.status = "succeeded";
+        state.user = getUserFromPayload(action.payload);
+        state.isLoggedOut = false;
+      })
+      .addMatcher(authApi.endpoints.updatePassword.matchFulfilled, (state, action) => {
+        state.status = "succeeded";
+        state.user = getUserFromPayload(action.payload);
+        state.isLoggedOut = false;
+      })
+      .addMatcher(authApi.endpoints.updateAvatar.matchFulfilled, (state, action) => {
+        state.status = "succeeded";
+        state.user = getUserFromPayload(action.payload);
+        state.isLoggedOut = false;
+      })
+      .addMatcher(authApi.endpoints.removeAvatar.matchFulfilled, (state, action) => {
+        state.status = "succeeded";
+        state.user = getUserFromPayload(action.payload);
+        state.isLoggedOut = false;
+      })
       .addMatcher(authApi.endpoints.logout.matchFulfilled, (state) => {
         state.user = null;
         state.status = "failed";

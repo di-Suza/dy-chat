@@ -25,6 +25,37 @@ export const authApi = baseApi.injectEndpoints({
       }),
       providesTags: ["Auth"]
     }),
+    updateProfile: builder.mutation({
+      query: (payload) => ({
+        url: "/auth/profile",
+        method: "PATCH",
+        body: payload
+      }),
+      invalidatesTags: ["Auth"]
+    }),
+    updatePassword: builder.mutation({
+      query: (payload) => ({
+        url: "/auth/password",
+        method: "PATCH",
+        body: payload
+      }),
+      invalidatesTags: ["Auth"]
+    }),
+    updateAvatar: builder.mutation({
+      query: (payload) => ({
+        url: "/auth/avatar",
+        method: "PATCH",
+        body: payload
+      }),
+      invalidatesTags: ["Auth"]
+    }),
+    removeAvatar: builder.mutation({
+      query: () => ({
+        url: "/auth/avatar",
+        method: "DELETE"
+      }),
+      invalidatesTags: ["Auth"]
+    }),
     logout: builder.mutation({
       query: () => ({
         url: "/auth/logout",
@@ -61,5 +92,9 @@ export const {
   useLoginMutation,
   useLogoutAllMutation,
   useLogoutMutation,
-  useRegisterMutation
+  useRemoveAvatarMutation,
+  useRegisterMutation,
+  useUpdateAvatarMutation,
+  useUpdatePasswordMutation,
+  useUpdateProfileMutation
 } = authApi;

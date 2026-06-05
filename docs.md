@@ -58,6 +58,8 @@ Backend Node.js, Express, and Socket.IO par setup kiya gaya hai.
 - `cookie-parser`: HTTP-only auth cookies read karne ke liye.
 - `express-validator`: request body validation ke liye.
 - `redis`: token blacklist store karne ke liye.
+- `multer`: multipart profile image uploads accept karne ke liye.
+- `imagekit`: ImageKit media upload/delete ke liye.
 
 ### `api/.env.example`
 
@@ -697,6 +699,7 @@ Auth phase ke baad backend me ye structure add hua:
 api/src/
   config/
     database.js
+    imageKit.js
     jwtKeys.js
     redis.js
   controllers/
@@ -704,6 +707,7 @@ api/src/
   middlewares/
     authenticate.js
     errorHandler.js
+    uploadImage.js
     validateRequest.js
   models/
     RefreshSession.js
@@ -712,6 +716,7 @@ api/src/
     auth.routes.js
   services/
     auth.service.js
+    imageKit.service.js
     tokenBlacklist.service.js
   utils/
     ApiError.js
@@ -751,6 +756,9 @@ ACCESS_TOKEN_COOKIE_NAME=dychat_access
 REFRESH_TOKEN_COOKIE_NAME=dychat_refresh
 COOKIE_SECURE=false
 COOKIE_SAME_SITE=lax
+IMAGE_KIT_PRIVATE=
+IMAGE_KIT_PUBLIC=
+IMAGE_KIT_URL_ENDPOINT=
 ```
 
 `api/src/config/env.js` central env config me ye values expose hoti hain.
@@ -810,6 +818,29 @@ Important:
 
 - Production me Redis running hona chahiye.
 - In-memory fallback server restart ke baad clear ho jaata hai, so production security ke liye Redis required hai.
+
+## ImageKit Config
+
+File:
+
+```txt
+api/src/config/imageKit.js
+api/src/services/imageKit.service.js
+```
+
+ImageKit profile picture upload/remove ke liye use hota hai.
+
+Env keys:
+
+- `IMAGE_KIT_PRIVATE`
+- `IMAGE_KIT_PUBLIC`
+- `IMAGE_KIT_URL_ENDPOINT`
+
+Behavior:
+
+- Profile image ImageKit ke `/dychat/profile-pictures` folder me upload hoti hai.
+- ImageKit ka `fileId` app me `avatar.publicId` field ke andar store hota hai.
+- Avatar replace/remove ke time old ImageKit file delete hoti hai.
 
 ## User Model
 
@@ -1189,6 +1220,274 @@ Auth slice now clears user on `logoutAll.fulfilled`.
 
 Logout and logout-all also reset RTK Query cache so protected cached data does not stay around after session removal.
 
+## 4. Profile Management
+
+Is phase me authenticated user ke liye profile management add kiya gaya.
+
+Main goal:
+
+- Private app navbar me user profile/avatar button.
+- If user avatar exists, avatar image dikhegi.
+- If avatar missing hai, default demo avatar with initials dikhega.
+- Profile button click par modal open hota hai.
+- User apna name update kar sakta hai.
+- Email readonly hai and update nahi hoti.
+- User current password ke basis par password update kar sakta hai.
+- Forgot password flow intentionally add nahi kiya gaya.
+- User profile picture upload/replace kar sakta hai.
+- User profile picture remove kar sakta hai.
+- User modal se logout kar sakta hai.
+- User modal se all sessions end kar sakta hai.
+
+## Backend Profile APIs
+
+Existing auth route group me protected profile routes add hue:
+
+```txt
+PATCH /api/auth/profile
+PATCH /api/auth/password
+PATCH /api/auth/avatar
+DELETE /api/auth/avatar
+```
+
+### Update Profile
+
+Route:
+
+```txt
+PATCH /api/auth/profile
+```
+
+Middleware:
+
+- `authenticate`
+- `updateProfileValidation`
+- `validateRequest`
+
+Body:
+
+```js
+{
+  name
+}
+```
+
+Flow:
+
+1. Access cookie authenticate hoti hai.
+2. Name validate hota hai.
+3. Service user ko load karta hai.
+4. Sirf `name` update hota hai.
+5. Updated safe user frontend ko return hota hai.
+
+Email is route me accept/update nahi hota.
+
+### Update Password
+
+Route:
+
+```txt
+PATCH /api/auth/password
+```
+
+Middleware:
+
+- `authenticate`
+- `updatePasswordValidation`
+- `validateRequest`
+
+Body:
+
+```js
+{
+  currentPassword,
+  newPassword
+}
+```
+
+Flow:
+
+1. Access cookie authenticate hoti hai.
+2. Current and new password validate hote hain.
+3. Service user ko password hash ke saath load karta hai.
+4. Current password bcrypt compare se verify hota hai.
+5. New password old password jaisa nahi hona chahiye.
+6. New password hash karke save hota hai.
+7. Updated safe user frontend ko return hota hai.
+
+### Update Profile Picture
+
+Route:
+
+```txt
+PATCH /api/auth/avatar
+```
+
+Middleware:
+
+- `authenticate`
+- `uploadProfileImage`
+
+Request:
+
+- multipart form data
+- file field name: `avatar`
+
+Flow:
+
+1. Access cookie authenticate hoti hai.
+2. Multer image ko memory buffer me accept karta hai.
+3. Sirf JPG, PNG, and WEBP images allow hoti hain.
+4. Max image size 5MB hai.
+5. ImageKit service image upload karta hai.
+6. User ke `avatar.url` and `avatar.publicId` update hote hain.
+7. Agar old avatar tha to old ImageKit file delete hoti hai.
+8. Updated safe user frontend ko return hota hai.
+
+### Remove Profile Picture
+
+Route:
+
+```txt
+DELETE /api/auth/avatar
+```
+
+Middleware:
+
+- `authenticate`
+
+Flow:
+
+1. Access cookie authenticate hoti hai.
+2. Agar user ke paas `avatar.publicId` hai to ImageKit file delete hoti hai.
+3. User ke avatar fields empty ho jaate hain.
+4. Updated safe user frontend ko return hota hai.
+
+## Backend Service Updates
+
+`api/src/services/auth.service.js` me add hua:
+
+- `updateUserProfile({ name, userId })`
+- `updateUserPassword({ currentPassword, newPassword, userId })`
+- `updateUserAvatar({ file, userId })`
+- `removeUserAvatar({ userId })`
+
+`updateUserProfile`:
+
+- user load karta hai.
+- name set karta hai.
+- user save karta hai.
+- serialized user return karta hai.
+
+`updateUserPassword`:
+
+- user ko `+passwordHash` ke saath load karta hai.
+- current password verify karta hai.
+- same password reuse block karta hai.
+- new password bcrypt hash karta hai.
+- serialized user return karta hai.
+
+`updateUserAvatar`:
+
+- multer se aayi image file require karta hai.
+- ImageKit me nayi image upload karta hai.
+- user avatar fields me ImageKit URL and file id save karta hai.
+- old avatar file cleanup karta hai.
+- serialized user return karta hai.
+
+`removeUserAvatar`:
+
+- current avatar ImageKit file delete karta hai.
+- user avatar fields empty karta hai.
+- serialized user return karta hai.
+
+`api/src/services/imageKit.service.js`:
+
+- ImageKit SDK client use karta hai.
+- profile image ko `/dychat/profile-pictures` folder me upload karta hai.
+- ImageKit `fileId` ko app ke `avatar.publicId` ke roop me return karta hai.
+- avatar remove/replace ke time ImageKit file delete karta hai.
+
+`api/src/config/imageKit.js`:
+
+- `IMAGE_KIT_PRIVATE`, `IMAGE_KIT_PUBLIC`, and `IMAGE_KIT_URL_ENDPOINT` se shared ImageKit client create karta hai.
+
+`api/src/middlewares/uploadImage.js`:
+
+- multer memory storage use karta hai.
+- single file field `avatar` accept karta hai.
+- allowed image types and 5MB size limit enforce karta hai.
+
+## Frontend Profile UI
+
+Private layout now renders:
+
+```txt
+AppHeader
+Outlet
+ProfileModal
+```
+
+New files:
+
+```txt
+web/src/app/layouts/AppHeader.jsx
+web/src/features/profile/ui/ProfileModal/ProfileModal.jsx
+web/src/features/profile/ui/ProfileModal/useProfileModal.js
+web/src/features/profile/ui/ProfileModal/profile.css
+```
+
+`AppHeader`:
+
+- app brand show karta hai.
+- right side profile button show karta hai.
+- avatar URL ho to image render karta hai.
+- avatar missing ho to default fallback avatar with initials render karta hai.
+
+`ProfileModal`:
+
+- user name field.
+- readonly email field.
+- profile picture preview.
+- upload photo button.
+- remove photo button.
+- current password field.
+- new password field.
+- logout button.
+- end all sessions button.
+
+`useProfileModal`:
+
+- profile form manage karta hai.
+- password form manage karta hai.
+- avatar upload/remove actions manage karta hai.
+- RTK Query profile/password/avatar/logout/logout-all mutations call karta hai.
+- logout ke baad user ko `/login` par navigate karta hai.
+- profile/password/avatar success messages 2 second baad auto-hide karta hai.
+
+## Frontend API Updates
+
+`web/src/features/auth/api/authApi.js` me add hua:
+
+- `updateProfile`: `PATCH /auth/profile`
+- `updatePassword`: `PATCH /auth/password`
+- `updateAvatar`: `PATCH /auth/avatar`
+- `removeAvatar`: `DELETE /auth/avatar`
+
+Generated hooks:
+
+- `useUpdateProfileMutation`
+- `useUpdatePasswordMutation`
+- `useUpdateAvatarMutation`
+- `useRemoveAvatarMutation`
+
+Auth slice updates:
+
+- `updateProfile.fulfilled` par user update hota hai.
+- `updatePassword.fulfilled` par user update hota hai.
+- `updateAvatar.fulfilled` par user update hota hai.
+- `removeAvatar.fulfilled` par user update hota hai.
+
 ## Current Run Commands
 
 Backend dev server:
@@ -1245,6 +1544,13 @@ Initial setup complete:
 - Logout and logout-all ready.
 - Backend global error handler ready.
 - Frontend global error boundary ready.
+- Profile management APIs ready.
+- ImageKit profile picture service ready.
+- Multer avatar upload middleware ready.
+- Navbar profile avatar button ready.
+- Profile modal ready.
+- Name update and password update linked end-to-end.
+- Profile picture update/remove linked end-to-end.
 
 Not added yet:
 

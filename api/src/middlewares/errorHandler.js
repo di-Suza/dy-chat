@@ -20,6 +20,15 @@ const normalizeError = (error) => {
     return new ApiError(400, "Invalid resource id");
   }
 
+  if (error.name === "MulterError") {
+    const message =
+      error.code === "LIMIT_FILE_SIZE"
+        ? "Profile image must be 5MB or smaller"
+        : error.message;
+
+    return new ApiError(400, message);
+  }
+
   if (error.code === 11000) {
     return new ApiError(409, "Resource already exists");
   }
@@ -36,8 +45,10 @@ export const notFoundHandler = (req, _res, next) => {
 export const globalErrorHandler = (error, _req, res, _next) => {
   const normalizedError = normalizeError(error);
   const isProduction = env.nodeEnv === "production";
+  const shouldLogError =
+    normalizedError.statusCode >= 500 || !normalizedError.isOperational;
 
-  if (!isProduction || normalizedError.statusCode >= 500) {
+  if (shouldLogError) {
     console.error(error);
   }
 
