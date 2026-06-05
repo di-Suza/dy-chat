@@ -2,6 +2,7 @@ import { Server } from "socket.io";
 
 import { env } from "../config/env.js";
 
+// Creates the Socket.IO server on top of the same HTTP server as Express.
 export const createSocketServer = (httpServer) => {
   const io = new Server(httpServer, {
     cors: {
@@ -10,6 +11,7 @@ export const createSocketServer = (httpServer) => {
     }
   });
 
+  // Initial base connection events; auth/socket room logic will be added later.
   io.on("connection", (socket) => {
     console.log(`Socket connected: ${socket.id}`);
 
@@ -25,4 +27,3 @@ export const createSocketServer = (httpServer) => {
 
   return io;
 };
-
