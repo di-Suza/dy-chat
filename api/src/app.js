@@ -8,6 +8,7 @@ import {
   notFoundHandler
 } from "./middlewares/errorHandler.js";
 import { authRoutes } from "./routes/auth.routes.js";
+import { userRoutes } from "./routes/user.routes.js";
 
 // Express app is exported separately so HTTP and Socket.IO can share one server.
 export const app = express();
@@ -41,6 +42,9 @@ app.get("/health", (_req, res) => {
 
 // Auth routes are prefixed with /api so frontend VITE_API_URL can point to /api.
 app.use("/api/auth", authRoutes);
+
+// User routes expose protected account discovery APIs.
+app.use("/api/users", userRoutes);
 
 // Unknown routes and errors are handled last.
 app.use(notFoundHandler);

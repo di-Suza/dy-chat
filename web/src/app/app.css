@@ -53,10 +53,10 @@ a {
 }
 
 .app-header {
-  display: flex;
+  display: grid;
   min-height: 68px;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 520px) minmax(44px, 1fr);
   align-items: center;
-  justify-content: space-between;
   gap: 18px;
   border-bottom: 1px solid #e2e8f0;
   padding: 0 24px;
@@ -72,6 +72,10 @@ a {
   font-weight: 900;
 }
 
+.app-header-brand {
+  justify-self: start;
+}
+
 .app-header-mark {
   display: inline-grid;
   width: 36px;
@@ -80,6 +84,35 @@ a {
   border-radius: 8px;
   color: #0f766e;
   background: #ccfbf1;
+}
+
+.app-search-trigger {
+  display: grid;
+  min-height: 44px;
+  min-width: 0;
+  width: 100%;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #d7e0ea;
+  border-radius: 8px;
+  padding: 0 14px;
+  color: #64748b;
+  background: #ffffff;
+  text-align: left;
+  cursor: pointer;
+}
+
+.app-search-trigger:hover {
+  border-color: #0f766e;
+  color: #0f766e;
+  box-shadow: 0 0 0 4px rgba(15, 118, 110, 0.1);
+}
+
+.app-search-trigger span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .app-profile-button {
@@ -92,6 +125,7 @@ a {
   padding: 0;
   background: #ffffff;
   cursor: pointer;
+  justify-self: end;
   overflow: hidden;
 }
 
@@ -204,5 +238,21 @@ a {
 @keyframes app-spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 680px) {
+  .app-header {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 10px;
+    padding: 0 12px;
+  }
+
+  .app-header-brand > span:last-child {
+    display: none;
+  }
+
+  .app-search-trigger {
+    padding: 0 12px;
   }
 }

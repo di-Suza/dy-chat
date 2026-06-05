@@ -1488,6 +1488,91 @@ Auth slice updates:
 - `updateAvatar.fulfilled` par user update hota hai.
 - `removeAvatar.fulfilled` par user update hota hai.
 
+## 5. User Search Foundation
+
+Is phase me chat start karne se pehle user discovery ka base UI and API banaya gaya.
+
+Main goal:
+
+- Navbar ke center me search box/button.
+- Search box click karte hi bada modal open hota hai.
+- Modal ke top me search input.
+- User type kare to matching users API se fetch hote hain.
+- Har user row ke aage `Start chat` button dikhta hai.
+- `Start chat` button abhi UI-only hai; actual conversation create flow next phase me add hoga.
+
+## Backend User Search API
+
+New backend files:
+
+```txt
+api/src/controllers/user.controller.js
+api/src/routes/user.routes.js
+api/src/services/user.service.js
+api/src/validations/user.validation.js
+```
+
+Route:
+
+```txt
+GET /api/users/search?q=<search>
+```
+
+Middleware:
+
+- `authenticate`
+- `searchUsersValidation`
+- `validateRequest`
+
+Flow:
+
+1. Access cookie authenticate hoti hai.
+2. Query `q` validate hota hai.
+3. Service current user ko results se exclude karta hai.
+4. User `name` and `email` me search hota hai.
+5. Max 12 safe user objects return hote hain.
+
+`api/src/app.js` me user routes mount hue:
+
+```txt
+/api/users
+```
+
+## Frontend User Search UI
+
+New frontend files:
+
+```txt
+web/src/features/users/api/usersApi.js
+web/src/features/users/ui/UserSearchModal/UserSearchModal.jsx
+web/src/features/users/ui/UserSearchModal/useUserSearchModal.js
+web/src/features/users/ui/UserSearchModal/userSearch.css
+```
+
+`AppHeader` update:
+
+- center search trigger added.
+- right side profile button same hai.
+- mobile par header compact hota hai.
+
+`PrivateLayout` update:
+
+- user search modal state manage karta hai.
+- `AppHeader` ke `onSearchClick` se modal open hota hai.
+- `UserSearchModal` private layout ke andar render hota hai.
+
+`usersApi`:
+
+- `searchUsers`: `GET /users/search`
+- generated hook: `useSearchUsersQuery`
+
+`useUserSearchModal`:
+
+- search input state manage karta hai.
+- input ko debounce karta hai.
+- empty input par API skip karta hai.
+- search loading/error/empty/results state modal ko deta hai.
+
 ## Current Run Commands
 
 Backend dev server:
@@ -1551,11 +1636,15 @@ Initial setup complete:
 - Profile modal ready.
 - Name update and password update linked end-to-end.
 - Profile picture update/remove linked end-to-end.
+- Protected user search API ready.
+- Navbar center search trigger ready.
+- User search modal ready.
 
 Not added yet:
 
 - Socket auth middleware.
 - Chat/message models.
+- Start chat conversation creation.
 - Real chat UI after login.
 - Group chat logic.
 

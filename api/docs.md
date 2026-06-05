@@ -15,6 +15,7 @@ Backend ka current goal authentication ko complete banana hai:
 - Update profile name
 - Update password with current password
 - Update/remove profile picture
+- Search users for starting chats later
 - HTTP-only cookie auth
 - RS256 JWT signing
 - MongoDB session tracking
@@ -134,6 +135,7 @@ api/src/
     redis.js
   controllers/
     auth.controller.js
+    user.controller.js
   lib/
     socket.js
   middlewares/
@@ -146,10 +148,12 @@ api/src/
     User.js
   routes/
     auth.routes.js
+    user.routes.js
   services/
     auth.service.js
     imageKit.service.js
     tokenBlacklist.service.js
+    user.service.js
   utils/
     ApiError.js
     cookies.js
@@ -159,6 +163,7 @@ api/src/
     tokens.js
   validations/
     auth.validation.js
+    user.validation.js
 ```
 
 ## App Boot Flow
@@ -202,6 +207,7 @@ Responsibilities:
 - Register root route.
 - Register health route.
 - Mount auth routes on `/api/auth`.
+- Mount user routes on `/api/users`.
 - Mount not found handler.
 - Mount global error handler.
 
@@ -210,6 +216,7 @@ Routes:
 - `GET /`
 - `GET /health`
 - `/api/auth/*`
+- `/api/users/*`
 
 Important:
 
@@ -662,6 +669,30 @@ Purpose:
 - Deletes old/removed ImageKit files by file id.
 - Converts ImageKit SDK failures into API errors.
 
+### user.service.js
+
+File:
+
+```txt
+api/src/services/user.service.js
+```
+
+Private helpers:
+
+- `escapeRegExp(value)`
+
+Exported services:
+
+- `searchUsers({ currentUserId, query })`
+
+Purpose:
+
+- Searches users by name or email.
+- Excludes the authenticated user from results.
+- Escapes regex-sensitive characters before building MongoDB regex filters.
+- Limits results to 12 users.
+- Returns serialized safe user objects only.
+
 ### auth.service.js
 
 File:
@@ -866,6 +897,7 @@ Used by:
 - `DELETE /api/auth/avatar`
 - `POST /api/auth/logout`
 - `POST /api/auth/logout-all`
+- `GET /api/users/search`
 
 Flow:
 
@@ -987,6 +1019,7 @@ File:
 
 ```txt
 api/src/validations/auth.validation.js
+api/src/validations/user.validation.js
 ```
 
 Exports:
@@ -995,6 +1028,7 @@ Exports:
 - `loginValidation`
 - `updateProfileValidation`
 - `updatePasswordValidation`
+- `searchUsersValidation`
 
 ### registerValidation
 
@@ -1025,6 +1059,12 @@ Validates:
 
 - `currentPassword`: required
 - `newPassword`: required, min 6 chars
+
+### searchUsersValidation
+
+Validates:
+
+- query `q`: required, 1-80 chars
 
 ## Controllers
 
@@ -1155,6 +1195,27 @@ Flow:
 2. Calls `logoutAllSessions`.
 3. Clears auth cookies.
 4. Returns success message.
+
+### user.controller.js
+
+File:
+
+```txt
+api/src/controllers/user.controller.js
+```
+
+Controller:
+
+- `searchUserList(req, res)`
+
+#### searchUserList
+
+Flow:
+
+1. Uses `req.user` from `authenticate`.
+2. Reads validated query `q`.
+3. Calls `searchUsers`.
+4. Returns matching safe users.
 
 ## Routes
 
@@ -1474,6 +1535,51 @@ Side effects:
 - all known token JTIs blacklisted
 - cookies cleared
 
+### GET /api/users/search
+
+Route file:
+
+```txt
+api/src/routes/user.routes.js
+```
+
+Middleware:
+
+- `authenticate`
+- `searchUsersValidation`
+- `validateRequest`
+
+Controller:
+
+- `searchUserList`
+
+Request:
+
+- access cookie
+- query string `q`
+
+Example:
+
+```txt
+GET /api/users/search?q=rahul
+```
+
+Response:
+
+```js
+{
+  status: true,
+  users
+}
+```
+
+Behavior:
+
+- searches user `name` and `email`
+- excludes the authenticated user
+- returns at most 12 users
+- returns safe serialized user fields
+
 ## Complete Auth Flows
 
 ### App Start
@@ -1568,6 +1674,23 @@ Side effects:
 6. Backend clears `avatar.url` and `avatar.publicId`.
 7. Frontend receives updated user and shows fallback avatar.
 
+### User Search Flow
+
+1. User clicks center search box in the private navbar.
+2. Frontend opens the user search modal.
+3. User types a name or email.
+4. Frontend debounces input and calls `GET /users/search?q=...`.
+5. Backend authenticates access cookie.
+6. Backend validates query `q`.
+7. Backend searches `name` and `email`, excluding current user.
+8. Backend returns matching safe user objects.
+9. Frontend renders users with `Start chat` button.
+
+Important:
+
+- `Start chat` button is UI-only in this phase.
+- Conversation creation will be added in the next chat phase.
+
 ### Refresh Flow
 
 1. Protected API returns `401`.
@@ -1616,6 +1739,8 @@ Side effects:
 - Profile picture uploads accept only JPG, PNG, and WEBP.
 - Profile picture uploads are limited to 5MB.
 - Uploaded files go directly from memory buffer to ImageKit; no local temp image files are saved.
+- User search is protected by access-cookie auth.
+- User search excludes the current authenticated user.
 
 ## Current Limitations
 

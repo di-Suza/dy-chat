@@ -1,4 +1,4 @@
-import { MessageCircle, UserRound } from "lucide-react";
+import { MessageCircle, Search, UserRound } from "lucide-react";
 
 const getInitials = (name = "") => {
   const initials = name
@@ -11,7 +11,7 @@ const getInitials = (name = "") => {
   return initials || "D";
 };
 
-export const AppHeader = ({ onProfileClick, user }) => {
+export const AppHeader = ({ onProfileClick, onSearchClick, user }) => {
   const avatarUrl = user?.avatar?.url;
 
   return (
@@ -22,6 +22,17 @@ export const AppHeader = ({ onProfileClick, user }) => {
         </span>
         <span>DyChat</span>
       </div>
+
+      <button
+        className="app-search-trigger"
+        type="button"
+        aria-label="Search users"
+        title="Search users"
+        onClick={onSearchClick}
+      >
+        <Search size={18} />
+        <span>Search users</span>
+      </button>
 
       <button
         className="app-profile-button"
@@ -42,4 +53,3 @@ export const AppHeader = ({ onProfileClick, user }) => {
     </header>
   );
 };
-
