@@ -1,0 +1,13 @@
+{
+  "name": "dychat",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Real-time one-to-one and group chat application.",
+  "scripts": {
+    "dev:api": "npm --prefix api run dev",
+    "dev:web": "npm --prefix web run dev",
+    "start:api": "npm --prefix api start",
+    "build:web": "npm --prefix web run build"
+  }
+}
+
