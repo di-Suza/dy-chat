@@ -65,6 +65,7 @@ export const ChatWorkspace = ({ onOpenUserSearch }) => {
     getConversationName,
     getConversationStatus,
     isGroupConversation,
+    isFetchingConversations,
     isFetchingMessages,
     isLoadingConversations,
     isMessageReadByOther,
@@ -116,7 +117,13 @@ export const ChatWorkspace = ({ onOpenUserSearch }) => {
   };
 
   const onMessageContextMenu = (event, message, isSent) => {
-    if (!isSent || message.isDeleted || message.optimistic || message.type === "system") {
+    if (
+      !isSent ||
+      message.isDeleted ||
+      message.isPending ||
+      message.optimistic ||
+      message.type === "system"
+    ) {
       return;
     }
 
@@ -180,10 +187,14 @@ export const ChatWorkspace = ({ onOpenUserSearch }) => {
         </label>
 
         <div className="chat-conversation-list">
-          {isLoadingConversations ? (
-            <div className="chat-empty-list">Loading chats</div>
+          {isLoadingConversations || (isFetchingConversations && !filteredConversations.length) ? (
+            <div className="chat-empty-list">Loading conversations</div>
           ) : filteredConversations.length ? (
-            filteredConversations.map((conversation) => {
+            <>
+              {isFetchingConversations ? (
+                <div className="chat-list-refreshing">Refreshing chats</div>
+              ) : null}
+              {filteredConversations.map((conversation) => {
               const isActive = conversation._id === activeConversationId;
               const name = getConversationName(conversation);
 
@@ -219,7 +230,8 @@ export const ChatWorkspace = ({ onOpenUserSearch }) => {
                   </span>
                 </button>
               );
-            })
+            })}
+            </>
           ) : (
             <div className="chat-empty-list">No chats yet</div>
           )}

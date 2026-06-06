@@ -285,6 +285,18 @@
   font-size: 14px;
 }
 
+.chat-list-refreshing {
+  display: grid;
+  min-height: 34px;
+  place-content: center;
+  border: 1px solid #253142;
+  border-radius: 8px;
+  color: #9bdccf;
+  background: rgba(20, 184, 166, 0.08);
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .chat-panel {
   display: grid;
   min-height: 0;
