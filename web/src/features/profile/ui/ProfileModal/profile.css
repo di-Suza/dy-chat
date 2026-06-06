@@ -295,3 +295,100 @@
     width: 100%;
   }
 }
+
+/* Cohesive theme refresh */
+.profile-modal-backdrop {
+  background: rgba(3, 7, 12, 0.78);
+  backdrop-filter: blur(10px);
+}
+
+.profile-modal {
+  border-color: var(--line-soft);
+  color: var(--text-main);
+  background: var(--surface-1);
+  box-shadow: var(--shadow-panel);
+}
+
+.profile-modal-header,
+.profile-session-actions {
+  border-color: var(--line-soft);
+}
+
+.profile-modal-header h2,
+.profile-section-heading h3 {
+  color: var(--text-main);
+}
+
+.profile-icon-button,
+.profile-field span {
+  color: var(--text-muted);
+}
+
+.profile-icon-button:hover {
+  border-color: rgba(45, 212, 191, 0.42);
+  color: var(--accent);
+  background: rgba(45, 212, 191, 0.12);
+}
+
+.profile-avatar {
+  border-color: var(--line-strong);
+  color: var(--accent);
+  background: #10212a;
+}
+
+.profile-field input {
+  border-color: var(--line-soft);
+  color: var(--text-main);
+  background: #0b1118;
+}
+
+.profile-field input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px rgba(45, 212, 191, 0.14);
+}
+
+.profile-field input:disabled {
+  color: var(--text-muted);
+  background: #0d141d;
+}
+
+.profile-primary-button {
+  color: var(--accent-ink);
+  background: var(--accent);
+}
+
+.profile-primary-button:hover:not(:disabled) {
+  background: #5eead4;
+}
+
+.profile-secondary-button {
+  border-color: var(--line-soft);
+  color: #dbe7f6;
+  background: var(--surface-1);
+}
+
+.profile-secondary-button:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(45, 212, 191, 0.12);
+}
+
+.profile-primary-button,
+.profile-secondary-button,
+.profile-danger-button {
+  transition:
+    border-color 0.18s ease,
+    background 0.18s ease,
+    color 0.18s ease,
+    transform 0.18s ease;
+}
+
+.profile-primary-button {
+  box-shadow: 0 12px 24px rgba(45, 212, 191, 0.16);
+}
+
+.profile-primary-button:hover:not(:disabled),
+.profile-secondary-button:hover:not(:disabled),
+.profile-danger-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+}

@@ -263,3 +263,115 @@
   cursor: not-allowed;
   opacity: 0.65;
 }
+
+/* Cohesive theme refresh */
+.new-group-backdrop {
+  background: rgba(3, 7, 12, 0.78);
+  backdrop-filter: blur(10px);
+}
+
+.new-group-modal {
+  border-color: var(--line-soft);
+  color: var(--text-main);
+  background: var(--surface-1);
+  box-shadow: var(--shadow-panel);
+}
+
+.new-group-header {
+  border-color: var(--line-soft);
+}
+
+.new-group-header h2,
+.new-group-user strong {
+  color: var(--text-main);
+}
+
+.new-group-header button,
+.new-group-user small,
+.new-group-state {
+  color: var(--text-muted);
+}
+
+.new-group-header button:hover {
+  border-color: rgba(45, 212, 191, 0.42);
+  color: var(--accent);
+  background: rgba(45, 212, 191, 0.12);
+}
+
+.new-group-avatar,
+.new-group-user-avatar {
+  border-color: var(--line-strong);
+  color: var(--accent);
+  background: #10212a;
+}
+
+.new-group-name span {
+  color: var(--text-muted);
+}
+
+.new-group-name input,
+.new-group-search {
+  border-color: var(--line-soft);
+  color: var(--text-main);
+  background: #0b1118;
+}
+
+.new-group-search input {
+  color: var(--text-main);
+}
+
+.new-group-name input:focus,
+.new-group-search:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px rgba(45, 212, 191, 0.14);
+}
+
+.new-group-selected button {
+  border-color: rgba(45, 212, 191, 0.3);
+  color: #ccfbf1;
+  background: rgba(45, 212, 191, 0.13);
+}
+
+.new-group-user {
+  transition:
+    border-color 0.18s ease,
+    background 0.18s ease,
+    transform 0.18s ease;
+}
+
+.new-group-user:hover {
+  border-color: var(--line-strong);
+  background: var(--surface-2);
+  transform: translateY(-1px);
+}
+
+.new-group-user i.is-selected {
+  border-color: var(--accent);
+  background: var(--accent);
+  box-shadow: inset 0 0 0 4px var(--surface-1);
+}
+
+.new-group-submit {
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  background: var(--accent);
+}
+
+.new-group-submit,
+.new-group-header button,
+.new-group-selected button {
+  transition:
+    border-color 0.18s ease,
+    background 0.18s ease,
+    color 0.18s ease,
+    transform 0.18s ease;
+}
+
+.new-group-submit {
+  box-shadow: 0 12px 24px rgba(45, 212, 191, 0.16);
+}
+
+.new-group-submit:hover:not(:disabled),
+.new-group-selected button:hover {
+  transform: translateY(-1px);
+}
