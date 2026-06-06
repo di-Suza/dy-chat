@@ -236,6 +236,32 @@ export const useChatWorkspace = () => {
     }
   };
 
+  const onSendAttachment = async (file) => {
+    if (!file || !activeConversationId || sendMessageState.isLoading) {
+      return;
+    }
+
+    const clientTempId = `temp-${Date.now()}`;
+    const caption = draftMessage.trim();
+    const formData = new FormData();
+    formData.append("conversationId", activeConversationId);
+    formData.append("clientTempId", clientTempId);
+    formData.append("attachment", file);
+
+    if (caption) {
+      formData.append("body", caption);
+    }
+
+    setDraftMessage("");
+    emitTypingStop(activeConversationId);
+
+    try {
+      await sendMessage(formData).unwrap();
+    } catch (_error) {
+      setDraftMessage(caption);
+    }
+  };
+
   const onLeaveGroup = async () => {
     if (!activeConversationId) {
       return;
@@ -276,6 +302,7 @@ export const useChatWorkspace = () => {
     onCloseConversation,
     onDeleteMessage,
     onDraftChange,
+    onSendAttachment,
     onLeaveGroup,
     onSelectConversation,
     onSendMessage,

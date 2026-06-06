@@ -1,17 +1,20 @@
 import {
   CheckCheck,
+  ChevronLeft,
+  Download,
+  File,
   LogOut,
   Menu,
   MessageCircle,
   Paperclip,
-  Phone,
   Search,
   Send,
   UserRound
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { setActiveConversationId } from "../../model/chatSlice.js";
+import { useGetAttachmentAccessUrlQuery } from "../../api/chatApi.js";
 import { useAppDispatch } from "../../../../app/store/hooks.js";
 import { GroupDetailsModal } from "../GroupDetailsModal/GroupDetailsModal.jsx";
 import { NewGroupModal } from "../NewGroupModal/NewGroupModal.jsx";
@@ -45,8 +48,90 @@ const Avatar = ({ isOnline, name, size = "md", url }) => {
   );
 };
 
+const formatFileSize = (size = 0) => {
+  if (!size) {
+    return "";
+  }
+
+  if (size < 1024 * 1024) {
+    return `${Math.max(1, Math.round(size / 1024))} KB`;
+  }
+
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+};
+
+const AttachmentContent = ({ attachment, message }) => {
+  const shouldFetchUrl = Boolean(
+    attachment?._id && message?._id && !message.isPending && !message.optimistic
+  );
+  const { data, isFetching } = useGetAttachmentAccessUrlQuery(
+    {
+      attachmentId: attachment?._id,
+      messageId: message?._id
+    },
+    {
+      skip: !shouldFetchUrl
+    }
+  );
+  const signedUrl = data?.url;
+
+  if (!shouldFetchUrl) {
+    return (
+      <div className="chat-attachment-card">
+        <File size={18} />
+        <span>
+          <strong>{attachment?.name || "Uploading attachment"}</strong>
+          <small>Uploading</small>
+        </span>
+      </div>
+    );
+  }
+
+  if (attachment.kind === "image" && signedUrl) {
+    return (
+      <a
+        className="chat-attachment-image"
+        href={signedUrl}
+        target="_blank"
+        rel="noreferrer"
+      >
+        <img src={signedUrl} alt={attachment.name || "Attachment"} />
+      </a>
+    );
+  }
+
+  if (attachment.kind === "video" && signedUrl) {
+    return (
+      <video className="chat-attachment-media" src={signedUrl} controls preload="metadata" />
+    );
+  }
+
+  if (attachment.kind === "audio" && signedUrl) {
+    return <audio className="chat-attachment-audio" src={signedUrl} controls />;
+  }
+
+  return (
+    <div className="chat-attachment-card">
+      <File size={18} />
+      <span>
+        <strong>{attachment.name || "Attachment"}</strong>
+        <small>
+          {isFetching ? "Preparing secure link" : formatFileSize(attachment.size)}
+        </small>
+      </span>
+      {signedUrl ? (
+        <a href={signedUrl} target="_blank" rel="noreferrer" download>
+          <Download size={17} />
+        </a>
+      ) : null}
+    </div>
+  );
+};
+
 export const ChatWorkspace = ({ onOpenUserSearch }) => {
   const dispatch = useAppDispatch();
+  const attachmentInputRef = useRef(null);
+  const messageListRef = useRef(null);
   const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
   const [isGroupDetailsOpen, setIsGroupDetailsOpen] = useState(false);
   const [isNewGroupOpen, setIsNewGroupOpen] = useState(false);
@@ -75,6 +160,7 @@ export const ChatWorkspace = ({ onOpenUserSearch }) => {
     onCloseConversation,
     onDeleteMessage,
     onDraftChange,
+    onSendAttachment,
     onLeaveGroup,
     onSelectConversation,
     onSendMessage,
@@ -84,6 +170,21 @@ export const ChatWorkspace = ({ onOpenUserSearch }) => {
   } = useChatWorkspace();
   const typingUserName = activeTypingUsers[0]?.name;
   const isActiveGroup = isGroupConversation(activeConversation);
+
+  useEffect(() => {
+    const messageList = messageListRef.current;
+
+    if (!messageList || !activeConversationId || isFetchingMessages) {
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      messageList.scrollTo({
+        behavior: "smooth",
+        top: messageList.scrollHeight
+      });
+    });
+  }, [activeConversationId, isFetchingMessages, messages.length]);
 
   const openNewChat = () => {
     setIsActionMenuOpen(false);
@@ -139,7 +240,7 @@ export const ChatWorkspace = ({ onOpenUserSearch }) => {
 
   return (
     <section
-      className="chat-workspace"
+      className={`chat-workspace ${activeConversation ? "has-active-chat" : ""}`}
       aria-label="Messages"
       onClick={() => {
         setPanelMenu(null);
@@ -246,6 +347,18 @@ export const ChatWorkspace = ({ onOpenUserSearch }) => {
         >
           <header className="chat-panel-header">
             <button
+              className="chat-mobile-back"
+              type="button"
+              aria-label="Back to conversations"
+              title="Back"
+              onClick={() => {
+                setIsGroupDetailsOpen(false);
+                onCloseConversation();
+              }}
+            >
+              <ChevronLeft size={22} />
+            </button>
+            <button
               className={`chat-contact chat-contact-button ${
                 isActiveGroup ? "is-clickable" : ""
               }`}
@@ -284,15 +397,11 @@ export const ChatWorkspace = ({ onOpenUserSearch }) => {
                 >
                   <LogOut size={19} />
                 </button>
-              ) : (
-                <button type="button" aria-label="Start call" title="Start call">
-                  <Phone size={19} />
-                </button>
-              )}
+              ) : null}
             </div>
           </header>
 
-          <div className="chat-message-list">
+          <div className="chat-message-list" ref={messageListRef}>
             {isFetchingMessages ? (
               <div className="chat-message-state">Loading messages</div>
             ) : messages.length ? (
@@ -318,10 +427,22 @@ export const ChatWorkspace = ({ onOpenUserSearch }) => {
                     {isActiveGroup && !isSent && !isSystemMessage ? (
                       <strong className="chat-message-sender">{senderName}</strong>
                     ) : null}
+                    {message.attachments?.length ? (
+                      <div className="chat-attachments">
+                        {message.attachments.map((attachment) => (
+                          <AttachmentContent
+                            attachment={attachment}
+                            key={attachment._id || attachment.name}
+                            message={message}
+                          />
+                        ))}
+                      </div>
+                    ) : null}
                     <p>
                       {message.isDeleted
                         ? "This message was deleted"
-                        : message.body || `${message.type} message`}
+                        : message.body ||
+                          (message.attachments?.length ? "" : `${message.type} message`)}
                     </p>
                     {!isSystemMessage ? (
                       <span>
@@ -370,7 +491,26 @@ export const ChatWorkspace = ({ onOpenUserSearch }) => {
                 onSendMessage();
               }}
             >
-              <button type="button" aria-label="Attach files" title="Attach files">
+              <input
+                ref={attachmentInputRef}
+                className="chat-file-input"
+                type="file"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+
+                  if (file) {
+                    onSendAttachment(file);
+                  }
+
+                  event.target.value = "";
+                }}
+              />
+              <button
+                type="button"
+                aria-label="Attach files"
+                title="Attach files"
+                onClick={() => attachmentInputRef.current?.click()}
+              >
                 <Paperclip size={20} />
               </button>
               <input

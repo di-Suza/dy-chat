@@ -72,6 +72,13 @@ const replaceMessageInList = (draft, tempId, message) => {
   }
 };
 
+const isFormDataPayload = (payload) =>
+  typeof FormData !== "undefined" && payload instanceof FormData;
+
+const getPayloadValue = (payload, key) => {
+  return isFormDataPayload(payload) ? payload.get(key) : payload[key];
+};
+
 export const chatApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     getConversations: builder.query({
@@ -137,6 +144,12 @@ export const chatApi = baseApi.injectEndpoints({
         }
       ]
     }),
+    getAttachmentAccessUrl: builder.query({
+      query: ({ attachmentId, messageId }) => ({
+        url: `/messages/${messageId}/attachments/${attachmentId}/url`,
+        method: "GET"
+      })
+    }),
     markConversationSeen: builder.mutation({
       query: (conversationId) => ({
         url: `/conversations/${conversationId}/seen`,
@@ -193,14 +206,18 @@ export const chatApi = baseApi.injectEndpoints({
         body: payload
       }),
       async onQueryStarted(payload, { dispatch, getState, queryFulfilled }) {
+        const isFormData = isFormDataPayload(payload);
         const user = selectCurrentUser(getState());
         const createdAt = new Date().toISOString();
-        const clientTempId = payload.clientTempId;
+        const clientTempId = getPayloadValue(payload, "clientTempId");
+        const conversationId = getPayloadValue(payload, "conversationId");
+        const body = getPayloadValue(payload, "body") || "";
+        const type = getPayloadValue(payload, "type") || "text";
         const optimisticMessage = {
           _id: clientTempId,
-          body: payload.body,
+          body,
           clientTempId,
-          conversation: payload.conversationId,
+          conversation: conversationId,
           createdAt,
           optimistic: true,
           readBy: [
@@ -210,40 +227,40 @@ export const chatApi = baseApi.injectEndpoints({
             }
           ],
           sender: user,
-          type: payload.type || "text",
+          type,
           updatedAt: createdAt
         };
-        const messagePatch = dispatch(
-          chatApi.util.updateQueryData(
-            "getMessages",
-            payload.conversationId,
-            (draft) => {
-              if (!draft.messages) {
-                draft.messages = [];
-              }
+        const messagePatch = isFormData
+          ? null
+          : dispatch(
+              chatApi.util.updateQueryData("getMessages", conversationId, (draft) => {
+                if (!draft.messages) {
+                  draft.messages = [];
+                }
 
-              draft.messages.push(optimisticMessage);
-            }
-          )
-        );
-        const conversationPatch = dispatch(
-          chatApi.util.updateQueryData("getConversations", undefined, (draft) => {
-            const conversation = draft.conversations?.find(
-              (item) => item._id === payload.conversationId
+                draft.messages.push(optimisticMessage);
+              })
             );
+        const conversationPatch = isFormData
+          ? null
+          : dispatch(
+              chatApi.util.updateQueryData("getConversations", undefined, (draft) => {
+                const conversation = draft.conversations?.find(
+                  (item) => item._id === conversationId
+                );
 
-            if (!conversation) {
-              return;
-            }
+                if (!conversation) {
+                  return;
+                }
 
-            conversation.lastMessage = optimisticMessage;
-            conversation.lastMessageAt = createdAt;
-            conversation.lastMessagePreview = payload.body;
-            conversation.lastMessageSender = user?._id;
-            conversation.unreadCount = 0;
-            sortConversations(draft.conversations);
-          })
-        );
+                conversation.lastMessage = optimisticMessage;
+                conversation.lastMessageAt = createdAt;
+                conversation.lastMessagePreview = body;
+                conversation.lastMessageSender = user?._id;
+                conversation.unreadCount = 0;
+                sortConversations(draft.conversations);
+              })
+            );
 
         try {
           const { data } = await queryFulfilled;
@@ -251,7 +268,7 @@ export const chatApi = baseApi.injectEndpoints({
           dispatch(
             chatApi.util.updateQueryData(
               "getMessages",
-              payload.conversationId,
+              conversationId,
               (draft) => {
                 replaceMessageInList(draft, clientTempId, data.message);
               }
@@ -263,8 +280,8 @@ export const chatApi = baseApi.injectEndpoints({
             })
           );
         } catch (_error) {
-          messagePatch.undo();
-          conversationPatch.undo();
+          messagePatch?.undo();
+          conversationPatch?.undo();
         }
       }
     }),
@@ -398,6 +415,7 @@ export const {
   useCreateGroupConversationMutation,
   useDeleteGroupConversationMutation,
   useDeleteMessageMutation,
+  useGetAttachmentAccessUrlQuery,
   useGetConversationsQuery,
   useGetMessagesQuery,
   useLeaveGroupConversationMutation,
