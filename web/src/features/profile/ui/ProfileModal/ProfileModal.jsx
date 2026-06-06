@@ -64,22 +64,7 @@ export const ProfileModal = ({ isOpen, onClose, user }) => {
         aria-labelledby="profile-modal-title"
       >
         <header className="profile-modal-header">
-          <div className="profile-title-wrap">
-            <div className="profile-avatar">
-              {avatarUrl ? (
-                <img src={avatarUrl} alt="" />
-              ) : (
-                <>
-                  <UserRound size={20} strokeWidth={2.2} />
-                  <span>{getInitials(user?.name)}</span>
-                </>
-              )}
-            </div>
-            <div>
-              <h2 id="profile-modal-title">Profile</h2>
-              <p>{user?.email}</p>
-            </div>
-          </div>
+          <h2 id="profile-modal-title">Edit Profile</h2>
           <button
             className="profile-icon-button"
             type="button"

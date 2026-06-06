@@ -5,6 +5,6 @@ import { baseQueryWithAuthGuard } from "./baseQueryWithAuthGuard.js";
 export const baseApi = createApi({
   reducerPath: "api",
   baseQuery: baseQueryWithAuthGuard,
-  tagTypes: ["Auth", "User"],
+  tagTypes: ["Auth", "Conversation", "Message", "User"],
   endpoints: () => ({})
 });
