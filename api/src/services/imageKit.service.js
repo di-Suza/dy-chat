@@ -2,6 +2,7 @@ import { imageKit, isImageKitConfigured } from "../config/imageKit.js";
 import { ApiError } from "../utils/ApiError.js";
 
 const profileImagesFolder = "/dychat/profile-pictures";
+const groupImagesFolder = "/dychat/group-pictures";
 
 // Extracts the safest useful message from ImageKit SDK errors.
 const getImageKitErrorMessage = (error, fallback) => {
@@ -23,6 +24,16 @@ const createProfileFileName = ({ file, userId }) => {
     "jpg";
 
   return `profile-${userId}-${Date.now()}.${extension}`;
+};
+
+// Builds a file name for group avatars uploaded during group creation.
+const createGroupFileName = ({ file, userId }) => {
+  const extension =
+    file.originalname?.split(".").pop()?.toLowerCase() ||
+    file.mimetype.split("/").pop() ||
+    "jpg";
+
+  return `group-${userId}-${Date.now()}.${extension}`;
 };
 
 // Uploads a multer in-memory image buffer to ImageKit and returns URL plus file id.
@@ -57,6 +68,42 @@ export const uploadProfileImageToImageKit = async ({ file, userId }) => {
     throw new ApiError(
       502,
       getImageKitErrorMessage(error, "Profile image upload failed")
+    );
+  }
+};
+
+// Uploads a group display picture to ImageKit and returns URL plus file id.
+export const uploadGroupImageToImageKit = async ({ file, userId }) => {
+  assertImageKitConfigured();
+
+  const encodedFile = `data:${file.mimetype};base64,${file.buffer.toString(
+    "base64"
+  )}`;
+
+  try {
+    const result = await imageKit.upload({
+      file: encodedFile,
+      fileName: createGroupFileName({
+        file,
+        userId
+      }),
+      folder: groupImagesFolder,
+      tags: ["dychat", "group-picture"],
+      useUniqueFileName: true
+    });
+
+    if (!result?.url || !result?.fileId) {
+      throw new Error("ImageKit returned an incomplete upload response");
+    }
+
+    return {
+      publicId: result.fileId,
+      url: result.url
+    };
+  } catch (error) {
+    throw new ApiError(
+      502,
+      getImageKitErrorMessage(error, "Group image upload failed")
     );
   }
 };

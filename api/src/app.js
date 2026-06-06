@@ -8,6 +8,8 @@ import {
   notFoundHandler
 } from "./middlewares/errorHandler.js";
 import { authRoutes } from "./routes/auth.routes.js";
+import { conversationRoutes } from "./routes/conversation.routes.js";
+import { messageRoutes } from "./routes/message.routes.js";
 import { userRoutes } from "./routes/user.routes.js";
 
 // Express app is exported separately so HTTP and Socket.IO can share one server.
@@ -45,6 +47,10 @@ app.use("/api/auth", authRoutes);
 
 // User routes expose protected account discovery APIs.
 app.use("/api/users", userRoutes);
+
+// Conversation and message routes power one-to-one chat.
+app.use("/api/conversations", conversationRoutes);
+app.use("/api/messages", messageRoutes);
 
 // Unknown routes and errors are handled last.
 app.use(notFoundHandler);

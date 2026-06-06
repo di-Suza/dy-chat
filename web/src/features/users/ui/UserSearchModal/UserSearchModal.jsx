@@ -1,5 +1,6 @@
 import { MessageCircle, Search, UserRound, X } from "lucide-react";
 
+import { useStartDirectConversationMutation } from "../../../chat/api/chatApi.js";
 import { useUserSearchModal } from "./useUserSearchModal.js";
 import "./userSearch.css";
 
@@ -19,6 +20,8 @@ const getSearchErrorMessage = (error) => {
 };
 
 export const UserSearchModal = ({ isOpen, onClose }) => {
+  const [startDirectConversation, startDirectConversationState] =
+    useStartDirectConversationMutation();
   const {
     inputRef,
     isSearching,
@@ -34,6 +37,16 @@ export const UserSearchModal = ({ isOpen, onClose }) => {
   if (!isOpen) {
     return null;
   }
+
+  const onStartChat = async (userId) => {
+    try {
+      await startDirectConversation(userId).unwrap();
+
+      onClose();
+    } catch (_error) {
+      // RTK Query exposes errors through the mutation state.
+    }
+  };
 
   return (
     <div className="user-search-backdrop" role="presentation">
@@ -106,14 +119,23 @@ export const UserSearchModal = ({ isOpen, onClose }) => {
                 <button
                   className="user-search-start-button"
                   type="button"
-                  onClick={() => {}}
+                  disabled={startDirectConversationState.isLoading}
+                  onClick={() => onStartChat(user._id || user.id)}
                 >
                   <MessageCircle size={17} />
-                  <span>Start chat</span>
+                  <span>
+                    {startDirectConversationState.isLoading
+                      ? "Starting"
+                      : "Start chat"}
+                  </span>
                 </button>
               </div>
             );
           })}
+
+          {startDirectConversationState.error ? (
+            <p className="user-search-alert">Unable to start chat.</p>
+          ) : null}
         </div>
       </section>
     </div>

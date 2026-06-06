@@ -571,7 +571,7 @@ Private routes:
 
 - `/app`
 
-`/app` par abhi placeholder protected page hai. Chat UI next phase me replace karega.
+`/app` par chat workspace render hota hai.
 
 ## Auth API Endpoints
 
@@ -1226,7 +1226,7 @@ Is phase me authenticated user ke liye profile management add kiya gaya.
 
 Main goal:
 
-- Private app navbar me user profile/avatar button.
+- Private app icon sidebar me user profile/avatar button.
 - If user avatar exists, avatar image dikhegi.
 - If avatar missing hai, default demo avatar with initials dikhega.
 - Profile button click par modal open hota hai.
@@ -1423,7 +1423,7 @@ Flow:
 Private layout now renders:
 
 ```txt
-AppHeader
+AppSidebar
 Outlet
 ProfileModal
 ```
@@ -1431,16 +1431,18 @@ ProfileModal
 New files:
 
 ```txt
-web/src/app/layouts/AppHeader.jsx
+web/src/app/layouts/AppSidebar.jsx
 web/src/features/profile/ui/ProfileModal/ProfileModal.jsx
 web/src/features/profile/ui/ProfileModal/useProfileModal.js
 web/src/features/profile/ui/ProfileModal/profile.css
 ```
 
-`AppHeader`:
+`AppSidebar`:
 
-- app brand show karta hai.
-- right side profile button show karta hai.
+- left side thin icon rail show karta hai.
+- top me chats icon hai.
+- search icon user search modal open karta hai.
+- bottom me profile/avatar button hai.
 - avatar URL ho to image render karta hai.
 - avatar missing ho to default fallback avatar with initials render karta hai.
 
@@ -1494,8 +1496,8 @@ Is phase me chat start karne se pehle user discovery ka base UI and API banaya g
 
 Main goal:
 
-- Navbar ke center me search box/button.
-- Search box click karte hi bada modal open hota hai.
+- Left icon sidebar me search button.
+- Search icon click karte hi bada modal open hota hai.
 - Modal ke top me search input.
 - User type kare to matching users API se fetch hote hain.
 - Har user row ke aage `Start chat` button dikhta hai.
@@ -1549,16 +1551,16 @@ web/src/features/users/ui/UserSearchModal/useUserSearchModal.js
 web/src/features/users/ui/UserSearchModal/userSearch.css
 ```
 
-`AppHeader` update:
+`AppSidebar` update:
 
-- center search trigger added.
-- right side profile button same hai.
-- mobile par header compact hota hai.
+- icon-only search trigger added.
+- bottom profile button same sidebar me hai.
+- mobile par sidebar compact hota hai.
 
 `PrivateLayout` update:
 
 - user search modal state manage karta hai.
-- `AppHeader` ke `onSearchClick` se modal open hota hai.
+- `AppSidebar` ke `onSearchClick` se modal open hota hai.
 - `UserSearchModal` private layout ke andar render hota hai.
 
 `usersApi`:
@@ -1572,6 +1574,395 @@ web/src/features/users/ui/UserSearchModal/userSearch.css
 - input ko debounce karta hai.
 - empty input par API skip karta hai.
 - search loading/error/empty/results state modal ko deta hai.
+
+## 6. Chat UI Foundation
+
+Is phase me realtime logic se pehle actual chat screen ka frontend UI banaya gaya.
+
+Main goal:
+
+- `/app` par placeholder page remove karke chat workspace show karna.
+- Left side conversation list.
+- Right side active chat window.
+- Conversation search field.
+- Active conversation header with avatar, name, and online/last seen status.
+- Header top-right call button.
+- Sent messages right side.
+- Received messages left side.
+- Bottom typing indicator.
+- Bottom composer with attachment button, message input, and send button.
+
+New frontend files:
+
+```txt
+web/src/features/chat/ui/ChatWorkspace/ChatWorkspace.jsx
+web/src/features/chat/ui/ChatWorkspace/useChatWorkspace.js
+web/src/features/chat/ui/ChatWorkspace/chat.css
+```
+
+Updated file:
+
+```txt
+web/src/app/pages/PrivateHomePage.jsx
+```
+
+`ChatWorkspace`:
+
+- sidebar and active chat panel render karta hai.
+- mock conversation data use karta hai for UI preview.
+- conversation list item click karne par active conversation change hoti hai.
+- active chat header me user avatar/name/status dikhta hai.
+- message bubbles direction ke basis par left/right align hote hain.
+- composer me attachment, input, and send controls ready hain.
+
+`useChatWorkspace`:
+
+- active conversation state manage karta hai.
+- conversation search state manage karta hai.
+- message draft state manage karta hai.
+- mock conversations ko search term se filter karta hai.
+
+Important:
+
+- Ye phase UI-only hai.
+- Real conversation API, message API, socket events, and file sending next phases me attach honge.
+
+## 7. App Shell Sidebar Update
+
+Is phase me top navbar remove karke permanent left icon sidebar add kiya gaya.
+
+Updated files:
+
+```txt
+web/src/app/layouts/PrivateLayout.jsx
+web/src/app/layouts/AppSidebar.jsx
+web/src/app/app.css
+web/src/features/chat/ui/ChatWorkspace/chat.css
+```
+
+Behavior:
+
+- Top navbar render nahi hota.
+- App shell ab `72px` left sidebar + main content grid hai.
+- Sidebar top me chats icon hai.
+- Sidebar me search icon same `UserSearchModal` open karta hai.
+- Sidebar bottom me user avatar/profile button hai.
+- Profile button same `ProfileModal` open karta hai.
+- Chat workspace ab full `100vh` height use karta hai.
+- Profile and search modals dark app shell palette ke saath match karte hain.
+
+## 8. Direct Chat Feature
+
+Is phase me one-to-one chat ka end-to-end base complete kiya gaya.
+
+Main goal:
+
+- Search modal se `Start chat` click par conversation create/reveal.
+- Conversation starter ko chat sidebar me conversation immediately dikhe.
+- Dusre participant ko conversation tab tak nahi dikhegi jab tak first message send nahi hota.
+- Send message API DB me message save karti hai.
+- Message save hote hi realtime `message:new` event participants ko milta hai.
+- Conversation sidebar realtime update hota hai.
+- Chat open karte hi unread messages seen ho jaate hain.
+- Conversation list unread count show karti hai.
+- Left app sidebar chat icon unseen chats count show karta hai.
+- Typing indicator realtime hai.
+- Online/offline presence realtime hai.
+
+## Backend Direct Chat
+
+New backend files:
+
+```txt
+api/src/controllers/conversation.controller.js
+api/src/controllers/message.controller.js
+api/src/middlewares/socketAuthenticate.js
+api/src/models/Conversation.js
+api/src/models/Message.js
+api/src/routes/conversation.routes.js
+api/src/routes/message.routes.js
+api/src/services/conversation.service.js
+api/src/services/message.service.js
+api/src/services/realtime.service.js
+api/src/utils/serializeConversation.js
+api/src/utils/serializeMessage.js
+api/src/validations/conversation.validation.js
+api/src/validations/message.validation.js
+```
+
+New API routes:
+
+```txt
+GET /api/conversations
+POST /api/conversations/direct
+GET /api/conversations/:conversationId/messages
+POST /api/conversations/:conversationId/seen
+POST /api/messages
+```
+
+`Conversation` model:
+
+- `participants` me dono direct chat users rahte hain.
+- `visibleTo` decide karta hai sidebar me conversation kis user ko dikhegi.
+- `directKey` duplicate direct conversations prevent karta hai.
+- `lastMessage`, `lastMessageAt`, and `lastMessagePreview` sidebar ke liye maintained hain.
+
+`Message` model:
+
+- `type`: `text`, `image`, `file`, `video`, `audio`.
+- `readBy` seen/unseen ke liye.
+- `clientTempId` optimistic frontend message replace karne ke liye.
+- `attachments` future media/file upload ke liye.
+
+Socket behavior:
+
+- Socket connect hone se pehle access cookie verify hoti hai.
+- Valid socket `user:<id>` room join karta hai.
+- First active socket user ko online mark karta hai.
+- Last disconnected socket user ko offline mark karta hai and `lastSeen` update karta hai.
+- Typing events backend participant check ke baad dusre participant ko forward karta hai.
+
+Central realtime service:
+
+- `emitConversationCreated`
+- `emitConversationUpdated`
+- `emitMessageCreated`
+- `emitMessagesSeen`
+- `emitTypingStarted`
+- `emitTypingStopped`
+- `emitUserPresence`
+
+## Frontend Direct Chat
+
+New frontend files:
+
+```txt
+web/src/app/hooks/useSocketConnection.js
+web/src/features/chat/api/chatApi.js
+web/src/features/chat/hooks/useChatRealtime.js
+web/src/features/chat/model/chatSlice.js
+web/src/shared/services/socket.js
+```
+
+Updated frontend behavior:
+
+- Protected layout connects socket after authenticated user reaches private app.
+- Logout/redirect/unmount disconnects socket.
+- User search modal `Start chat` now calls backend.
+- Created direct conversation sidebar me add hoti hai, but chat window auto-open nahi hoti.
+- Chat workspace reads conversations/messages from RTK Query.
+- Send message uses optimistic cache update.
+- Realtime message events update message and conversation caches.
+- Opening an unread conversation calls seen API.
+- Presence events update participant online/offline status in cached conversations.
+- Typing events update active chat typing indicator.
+
+Important:
+
+- Group chat abhi add nahi hua.
+- File/image/video/audio upload flow abhi attach nahi hua, but message schema ready hai.
+
+## 9. Group Chat Feature
+
+Is phase me direct chat ke upar group chat layer add ki gayi.
+
+Main goal:
+
+- Conversation sidebar header me actions menu.
+- `New Chat` se existing user search modal open hota hai.
+- `New Group` se group creation modal open hota hai.
+- Group name, optional group DP, and selected users ke saath group create hota hai.
+- Creator group admin hota hai.
+- Group immediately selected members ki conversation list me visible hota hai.
+- Offline member login kare to usko group already conversation list me milega.
+- Group messages me sender name message ke saath dikhta hai.
+- Group typing indicator me username show hota hai.
+- Group chat header me call button nahi, leave button dikhta hai.
+- Leave par remaining members ko center system message dikhta hai.
+- Message unsend/delete for everyone add hua.
+- Chat window right click par `Close chat` option add hua.
+- Typing indicator dots animated hain.
+- Direct chat start karne par chat auto-open nahi hoti; user manually conversation click karega.
+
+## Backend Group Chat
+
+Updated backend files:
+
+```txt
+api/src/models/Conversation.js
+api/src/models/Message.js
+api/src/controllers/conversation.controller.js
+api/src/controllers/message.controller.js
+api/src/routes/conversation.routes.js
+api/src/routes/message.routes.js
+api/src/services/conversation.service.js
+api/src/services/message.service.js
+api/src/services/imageKit.service.js
+api/src/services/realtime.service.js
+api/src/middlewares/uploadImage.js
+api/src/utils/serializeConversation.js
+api/src/utils/serializeMessage.js
+api/src/validations/conversation.validation.js
+api/src/validations/message.validation.js
+```
+
+New routes:
+
+```txt
+POST /api/conversations/groups
+POST /api/conversations/:conversationId/leave
+DELETE /api/messages/:messageId
+```
+
+`Conversation` model now supports:
+
+- `name` for group name.
+- `avatar.url` and `avatar.publicId` for group DP.
+- `admins` for group admin users.
+- `type: "group"` for group conversations.
+
+`Message` model now supports:
+
+- `type: "system"` for events like user left group.
+- `isDeleted` and `deletedAt` for unsend/delete-for-everyone.
+
+Group create flow:
+
+1. Frontend sends multipart form data with `name`, `participantIds`, and optional `avatar`.
+2. Backend uploads group DP to ImageKit when provided.
+3. Backend creates group with creator + selected users.
+4. `visibleTo` includes all group members immediately.
+5. Backend emits `conversation:created` to every member.
+
+Leave group flow:
+
+1. User clicks leave in group header.
+2. Backend verifies user is a group participant.
+3. User is removed from `participants` and `visibleTo`.
+4. If needed, next remaining user is promoted as admin.
+5. Backend creates a `system` message like `<name> left this group`.
+6. Removed user receives `conversation:removed`.
+7. Remaining users receive `message:new` and `conversation:updated`.
+
+Message delete flow:
+
+1. Sender right-clicks own message and chooses `Unsend message`.
+2. Backend verifies sender owns the message.
+3. Message body/attachments are cleared.
+4. Message gets `isDeleted: true`.
+5. Backend emits `message:deleted` and conversation updates.
+
+## Frontend Group Chat
+
+New frontend files:
+
+```txt
+web/src/features/chat/ui/NewGroupModal/NewGroupModal.jsx
+web/src/features/chat/ui/NewGroupModal/newGroup.css
+```
+
+Updated frontend behavior:
+
+- Chat sidebar header action button opens dropdown.
+- Dropdown has `New Chat` and `New Group`.
+- `New Group` modal handles group name, avatar preview, user search, selected users, and submit.
+- Chat workspace is group-aware:
+  - group name/avatar shown in list and header.
+  - group member count shown in header status.
+  - group messages show sender name for received messages.
+  - group header shows leave button instead of call button.
+  - system messages are centered.
+- Realtime cache now handles:
+  - `conversation:removed`
+  - `message:deleted`
+- Right click active chat panel opens `Close chat`.
+- Right click own message opens `Unsend message`.
+- Existing user search `Start chat` now only creates/reveals conversation and does not auto-open it.
+
+## 10. Group Management Modal
+
+Is phase me group header se group details/manage modal add kiya gaya.
+
+Main goal:
+
+- Group chat window ke header me group avatar/name area clickable hai.
+- Click par group details modal open hota hai.
+- Admin ko edit/manage options milte hain.
+- Normal member ko same modal read-only details ke roop me dikhta hai.
+- Admin group name update kar sakta hai.
+- Admin group profile image update kar sakta hai.
+- Admin naye members add kar sakta hai.
+- Admin existing members remove kar sakta hai.
+- Admin full group delete kar sakta hai.
+
+## Backend Group Management APIs
+
+New routes:
+
+```txt
+PATCH /api/conversations/:conversationId/group
+POST /api/conversations/:conversationId/members
+DELETE /api/conversations/:conversationId/members/:memberId
+DELETE /api/conversations/:conversationId/group
+```
+
+Admin rule:
+
+- Ye management APIs sirf group admins ke liye allowed hain.
+- Normal participant route hit karega to `403` milega.
+
+Update group flow:
+
+1. Admin group details modal se name/avatar update karta hai.
+2. Frontend multipart `FormData` bhejta hai.
+3. Backend admin check karta hai.
+4. Optional avatar ImageKit me upload hota hai.
+5. Old group avatar delete hota hai.
+6. Updated conversation realtime `conversation:updated` se members ko milti hai.
+
+Add members flow:
+
+1. Admin modal me users search karke selected users add karta hai.
+2. Backend duplicate/existing members filter karta hai.
+3. New members `participants` and `visibleTo` me add hote hain.
+4. New members ko `conversation:created` milta hai.
+5. Existing members ko `conversation:updated` milta hai.
+
+Remove member flow:
+
+1. Admin member list se remove button click karta hai.
+2. Backend user ko `participants` and `visibleTo` se remove karta hai.
+3. Removed user ko `conversation:removed` milta hai.
+4. Remaining users ko updated conversation milti hai.
+
+Delete group flow:
+
+1. Admin delete group confirm karta hai.
+2. Backend conversation and messages delete karta hai.
+3. Group avatar ImageKit se delete hota hai.
+4. Sabhi members ko `conversation:removed` event milta hai.
+
+## Frontend Group Management
+
+New frontend files:
+
+```txt
+web/src/features/chat/ui/GroupDetailsModal/GroupDetailsModal.jsx
+web/src/features/chat/ui/GroupDetailsModal/groupDetails.css
+```
+
+Updated frontend behavior:
+
+- `ChatWorkspace` me group contact header button ban gaya.
+- `GroupDetailsModal` current conversation payload se group details render karta hai.
+- `admins` array se current user ka admin status calculate hota hai.
+- Admin ke liye inputs/buttons active hote hain.
+- Normal user ke liye group name readonly and action buttons hidden hote hain.
+- RTK Query me group management mutations add hue:
+  - `updateGroupConversation`
+  - `addGroupMembers`
+  - `removeGroupMember`
+  - `deleteGroupConversation`
 
 ## Current Run Commands
 
@@ -1632,20 +2023,37 @@ Initial setup complete:
 - Profile management APIs ready.
 - ImageKit profile picture service ready.
 - Multer avatar upload middleware ready.
-- Navbar profile avatar button ready.
+- Left icon app sidebar ready.
+- Sidebar profile avatar button ready.
 - Profile modal ready.
 - Name update and password update linked end-to-end.
 - Profile picture update/remove linked end-to-end.
 - Protected user search API ready.
-- Navbar center search trigger ready.
+- Sidebar search trigger ready.
 - User search modal ready.
+- Chat workspace UI ready.
+- Conversation list UI ready.
+- Active chat window UI ready.
+- Direct conversation model ready.
+- Message model ready.
+- Start direct chat API linked.
+- Send text message API linked.
+- Realtime message delivery ready.
+- Typing indicator events ready.
+- Online/offline presence events ready.
+- Seen/unseen message flow ready.
+- Sidebar unseen chat count ready.
+- Group conversation create API ready.
+- Group creation modal ready.
+- Group message rendering ready.
+- Group leave flow ready.
+- System messages ready.
+- Message unsend/delete flow ready.
+- Group management modal ready.
+- Admin-only group edit/member/delete APIs ready.
 
 Not added yet:
 
-- Socket auth middleware.
-- Chat/message models.
-- Start chat conversation creation.
-- Real chat UI after login.
-- Group chat logic.
+- Real file/image/video/audio sending.
 
 Ye sab next commits me step-by-step add hoga.

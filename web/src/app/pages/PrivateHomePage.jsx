@@ -1,12 +1,9 @@
-import { MessageSquareText } from "lucide-react";
+import { useOutletContext } from "react-router-dom";
+
+import { ChatWorkspace } from "../../features/chat/ui/ChatWorkspace/ChatWorkspace.jsx";
 
 export const PrivateHomePage = () => {
-  return (
-    <main className="private-home">
-      <MessageSquareText className="private-home-icon" size={42} strokeWidth={1.8} />
-      <h1>Chats</h1>
-      <p>Protected workspace is wired. Chat screens will replace this page in the next feature phase.</p>
-    </main>
-  );
-};
+  const context = useOutletContext();
 
+  return <ChatWorkspace onOpenUserSearch={context?.openUserSearch} />;
+};

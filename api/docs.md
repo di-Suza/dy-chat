@@ -1688,8 +1688,8 @@ Behavior:
 
 Important:
 
-- `Start chat` button is UI-only in this phase.
-- Conversation creation will be added in the next chat phase.
+- `Start chat` now creates or reveals a direct conversation.
+- The conversation appears only in the starter's sidebar until the first message is sent.
 
 ### Refresh Flow
 
@@ -1724,6 +1724,543 @@ Important:
 6. Backend clears cookies for current browser.
 7. Frontend clears user state/cache.
 
+## Direct Chat APIs And Realtime
+
+This phase adds one-to-one chat backend and socket behavior.
+
+New backend files:
+
+```txt
+api/src/controllers/conversation.controller.js
+api/src/controllers/message.controller.js
+api/src/middlewares/socketAuthenticate.js
+api/src/models/Conversation.js
+api/src/models/Message.js
+api/src/routes/conversation.routes.js
+api/src/routes/message.routes.js
+api/src/services/conversation.service.js
+api/src/services/message.service.js
+api/src/services/realtime.service.js
+api/src/utils/serializeConversation.js
+api/src/utils/serializeMessage.js
+api/src/validations/conversation.validation.js
+api/src/validations/message.validation.js
+```
+
+### Conversation Model
+
+File:
+
+```txt
+api/src/models/Conversation.js
+```
+
+Important fields:
+
+- `type`: `direct` or `group`
+- `directKey`: sorted direct participant ids for unique one-to-one chat
+- `participants`: all users in the conversation
+- `visibleTo`: users who should see this conversation in sidebar
+- `createdBy`
+- `lastMessage`
+- `lastMessageAt`
+- `lastMessagePreview`
+- `lastMessageSender`
+
+Important behavior:
+
+- `participants` always stores both direct chat users.
+- `visibleTo` can initially contain only the starter.
+- First sent message adds all participants to `visibleTo`.
+
+### Message Model
+
+File:
+
+```txt
+api/src/models/Message.js
+```
+
+Important fields:
+
+- `conversation`
+- `sender`
+- `body`
+- `type`: `text`, `image`, `file`, `video`, `audio`
+- `attachments`
+- `readBy`
+- `clientTempId`
+
+Purpose:
+
+- Stores message content and future media metadata.
+- Stores per-user read receipts for seen/unseen logic.
+- Echoes `clientTempId` so frontend optimistic messages can be replaced.
+
+### Conversation Services
+
+File:
+
+```txt
+api/src/services/conversation.service.js
+```
+
+Exports:
+
+- `listUserConversations({ userId })`
+- `createDirectConversation({ participantId, userId })`
+- `getConversationForParticipant({ conversationId, userId })`
+- `listConversationMessages({ conversationId, userId })`
+- `markConversationMessagesSeen({ conversationId, userId })`
+- `getConversationParticipantIds({ conversationId, userId })`
+- `getPresenceRecipientIds(userId)`
+- `serializeConversationForUser({ conversation, userId })`
+
+Core responsibilities:
+
+- Create/reveal one-to-one conversations.
+- Keep conversation sidebar visibility separate from participants.
+- Calculate unread message counts per current user.
+- Mark incoming messages as seen.
+- Return participant ids for typing and presence events.
+
+### Message Service
+
+File:
+
+```txt
+api/src/services/message.service.js
+```
+
+Export:
+
+- `sendConversationMessage({ body, clientTempId, conversationId, senderId, type })`
+
+Flow:
+
+1. Validate message body/type.
+2. Verify sender is a conversation participant.
+3. Create message document.
+4. Mark sender as read in `readBy`.
+5. Add all participants to conversation `visibleTo`.
+6. Update last message metadata.
+7. Return serialized message and per-user conversation payloads.
+
+### Realtime Service
+
+File:
+
+```txt
+api/src/services/realtime.service.js
+```
+
+Exports:
+
+- `registerRealtimeServer(io)`
+- `addUserConnection({ socketId, userId })`
+- `removeUserConnection({ socketId, userId })`
+- `emitToUser({ event, payload, userId })`
+- `emitConversationCreated({ conversation, userId })`
+- `emitConversationUpdated({ conversation, userId })`
+- `emitMessageCreated({ message, userId })`
+- `emitMessagesSeen({ conversationId, seenBy, userIds })`
+- `emitTypingStarted({ conversationId, user, userIds })`
+- `emitTypingStopped({ conversationId, user, userIds })`
+- `emitUserPresence({ isOnline, lastSeen, userId, userIds })`
+
+Purpose:
+
+- Keeps socket event names centralized.
+- Emits to per-user rooms like `user:<id>`.
+- Tracks multiple tabs/devices before marking a user offline.
+
+### Socket Auth Flow
+
+File:
+
+```txt
+api/src/middlewares/socketAuthenticate.js
+```
+
+Flow:
+
+1. Parse access cookie from Socket.IO handshake headers.
+2. Verify RS256 access token.
+3. Check access token blacklist.
+4. Check refresh session exists.
+5. Check access JTI is latest for the session.
+6. Load user and attach it to `socket.user`.
+
+Socket connection behavior in `api/src/lib/socket.js`:
+
+1. Authenticated socket joins `user:<id>` room.
+2. First active socket marks user `isOnline: true`.
+3. Presence is emitted to conversation participants.
+4. Last disconnected socket marks user `isOnline: false` and updates `lastSeen`.
+5. Typing start/stop client events are verified by conversation membership and forwarded to other participants.
+
+### Chat Routes
+
+Base:
+
+```txt
+/api/conversations
+/api/messages
+```
+
+#### GET /api/conversations
+
+Returns visible conversations for the current user.
+
+Response:
+
+```js
+{
+  status: true,
+  conversations
+}
+```
+
+Each conversation includes:
+
+- `participants`
+- `otherParticipant`
+- `lastMessage`
+- `lastMessagePreview`
+- `unreadCount`
+
+#### POST /api/conversations/direct
+
+Body:
+
+```js
+{
+  participantId
+}
+```
+
+Flow:
+
+1. Authenticates current user.
+2. Creates direct conversation if missing.
+3. Otherwise reveals existing conversation to starter.
+4. Emits `conversation:created` to starter.
+
+#### GET /api/conversations/:conversationId/messages
+
+Returns ordered messages after participant access check.
+
+#### POST /api/conversations/:conversationId/seen
+
+Flow:
+
+1. Authenticates current user.
+2. Marks all incoming unread messages as read by current user.
+3. Emits `messages:seen`.
+4. Emits per-user `conversation:updated` payloads so unread counts refresh.
+
+#### POST /api/messages
+
+Body:
+
+```js
+{
+  conversationId,
+  body,
+  type,
+  clientTempId
+}
+```
+
+Flow:
+
+1. Saves message.
+2. Updates conversation last message metadata.
+3. Adds all participants to `visibleTo`.
+4. Emits `message:new` to all participants.
+5. Emits `conversation:updated` to all participants with user-specific unread counts.
+
+### Socket Events
+
+Client emits:
+
+- `typing:start`
+- `typing:stop`
+
+Server emits:
+
+- `conversation:created`
+- `conversation:updated`
+- `message:new`
+- `messages:seen`
+- `typing:started`
+- `typing:stopped`
+- `user:presence`
+
+### Direct Chat Flow
+
+1. User searches another user.
+2. Frontend calls `POST /conversations/direct`.
+3. Backend creates/reveals conversation.
+4. Starter sees conversation immediately.
+5. Other participant does not see it until first message.
+6. User sends message through `POST /messages`.
+7. Message is saved in MongoDB.
+8. Conversation becomes visible to both users.
+9. Backend emits realtime message and sidebar updates.
+
+### Seen/Unseen Flow
+
+1. Unread count is calculated from messages where current user is not sender and is not in `readBy`.
+2. Conversation list shows `unreadCount`.
+3. Opening a conversation calls `POST /conversations/:id/seen`.
+4. Backend adds current user to all matching messages' `readBy`.
+5. Backend emits seen receipt and updated conversation counts.
+
+## Group Chat APIs And Realtime
+
+This phase adds group conversation support on top of the direct chat system.
+
+Updated backend files:
+
+```txt
+api/src/models/Conversation.js
+api/src/models/Message.js
+api/src/controllers/conversation.controller.js
+api/src/controllers/message.controller.js
+api/src/routes/conversation.routes.js
+api/src/routes/message.routes.js
+api/src/services/conversation.service.js
+api/src/services/message.service.js
+api/src/services/imageKit.service.js
+api/src/services/realtime.service.js
+api/src/middlewares/uploadImage.js
+api/src/validations/conversation.validation.js
+api/src/validations/message.validation.js
+```
+
+### Group Model Fields
+
+`Conversation` now includes:
+
+- `name`: group name.
+- `avatar.url`: ImageKit URL for group display picture.
+- `avatar.publicId`: ImageKit file id.
+- `admins`: group admin user ids.
+- `type`: `direct` or `group`.
+
+For groups, `participants` are current members and `visibleTo` decides whose sidebar shows the group.
+
+`Message` now includes:
+
+- `type: "system"` for center timeline events like a member leaving.
+- `isDeleted` and `deletedAt` for unsend/delete-for-everyone.
+
+### POST /api/conversations/groups
+
+Creates a new group conversation.
+
+Middleware:
+
+- `authenticate`
+- `uploadGroupImage`
+- `createGroupConversationValidation`
+- `validateRequest`
+
+Request:
+
+- multipart form data
+- `name`: group name
+- `participantIds`: JSON string or repeated ids
+- optional file field `avatar`
+
+Flow:
+
+1. Authenticates creator.
+2. Accepts optional group DP in memory with multer.
+3. Uploads group DP to ImageKit when provided.
+4. Adds creator plus selected users as unique participants.
+5. Adds creator to `admins`.
+6. Adds every participant to `visibleTo`.
+7. Emits `conversation:created` to every participant.
+
+Response:
+
+```js
+{
+  status: true,
+  conversation
+}
+```
+
+### POST /api/conversations/:conversationId/leave
+
+Removes current user from a group.
+
+Flow:
+
+1. Verifies current user is a group participant.
+2. Removes user from `participants` and `visibleTo`.
+3. Removes user from `admins`.
+4. Promotes a remaining member if no admin remains.
+5. Creates a `system` message like `<name> left this group`.
+6. Emits `conversation:removed` to removed user.
+7. Emits `message:new` and `conversation:updated` to remaining users.
+
+### DELETE /api/messages/:messageId
+
+Deletes/unsends a sender-owned message for everyone.
+
+Rules:
+
+- Only the sender can delete their message.
+- System messages cannot be deleted.
+- Message document remains so timeline order stays stable.
+
+Flow:
+
+1. Verifies sender owns the message.
+2. Verifies sender still belongs to the conversation.
+3. Clears message body and attachments.
+4. Sets `isDeleted: true` and `deletedAt`.
+5. Updates last-message preview when needed.
+6. Emits `message:deleted` and `conversation:updated` to participants.
+
+### New Service Functions
+
+`conversation.service.js`:
+
+- `createGroupConversation({ avatar, name, participantIds, userId })`
+- `leaveGroupConversation({ conversationId, userId })`
+
+`message.service.js`:
+
+- `deleteConversationMessage({ messageId, userId })`
+
+`imageKit.service.js`:
+
+- `uploadGroupImageToImageKit({ file, userId })`
+
+### New Realtime Events
+
+Server emits:
+
+- `conversation:removed`
+- `message:deleted`
+
+Typing, message, seen, and presence events are group-compatible because backend verifies conversation membership before forwarding events.
+
+## Group Management APIs
+
+This phase adds admin-only group management.
+
+New routes:
+
+```txt
+PATCH /api/conversations/:conversationId/group
+POST /api/conversations/:conversationId/members
+DELETE /api/conversations/:conversationId/members/:memberId
+DELETE /api/conversations/:conversationId/group
+```
+
+Admin rule:
+
+- Current user must be in `conversation.admins`.
+- Non-admin group members can view group details from the frontend cache, but edit APIs return `403`.
+
+### PATCH /api/conversations/:conversationId/group
+
+Updates group name and/or avatar.
+
+Middleware:
+
+- `authenticate`
+- `uploadGroupImage`
+- `conversationIdParamValidation`
+- `updateGroupConversationValidation`
+- `validateRequest`
+
+Request:
+
+- multipart form data
+- optional `name`
+- optional file field `avatar`
+
+Flow:
+
+1. Verifies conversation exists, is a group, and current user is participant.
+2. Verifies current user is admin.
+3. Updates `name` when provided.
+4. Uploads new group avatar to ImageKit when provided.
+5. Deletes old group avatar file when replaced.
+6. Emits `conversation:updated` to all current members.
+
+### POST /api/conversations/:conversationId/members
+
+Adds members to a group.
+
+Body:
+
+```js
+{
+  participantIds
+}
+```
+
+Flow:
+
+1. Verifies current user is group admin.
+2. Removes duplicate ids.
+3. Ignores users already in the group.
+4. Verifies all new users exist.
+5. Adds new users to `participants`.
+6. Adds new users to `visibleTo`.
+7. Emits `conversation:created` to new members.
+8. Emits `conversation:updated` to existing members.
+
+### DELETE /api/conversations/:conversationId/members/:memberId
+
+Removes one member from a group.
+
+Rules:
+
+- Admin cannot remove self through this route; self-removal uses leave group.
+- Removed user is removed from `participants`, `visibleTo`, and `admins`.
+
+Flow:
+
+1. Verifies current user is group admin.
+2. Verifies target user is a group member.
+3. Removes target user from group arrays.
+4. Emits `conversation:removed` to removed user.
+5. Emits `conversation:updated` to remaining members.
+
+### DELETE /api/conversations/:conversationId/group
+
+Deletes the full group for all members.
+
+Flow:
+
+1. Verifies current user is group admin.
+2. Collects participant ids.
+3. Deletes all messages for the conversation.
+4. Deletes the conversation.
+5. Deletes group avatar from ImageKit when present.
+6. Emits `conversation:removed` to every participant.
+
+### Group Management Service Functions
+
+`conversation.service.js` added:
+
+- `updateGroupConversation({ avatar, conversationId, name, userId })`
+- `addGroupMembers({ conversationId, participantIds, userId })`
+- `removeGroupMember({ conversationId, memberId, userId })`
+- `deleteGroupConversation({ conversationId, userId })`
+
+Private helper:
+
+- `assertGroupAdmin(conversation, userId)`
+
 ## Security Notes
 
 - Passwords are hashed with bcrypt.
@@ -1741,15 +2278,23 @@ Important:
 - Uploaded files go directly from memory buffer to ImageKit; no local temp image files are saved.
 - User search is protected by access-cookie auth.
 - User search excludes the current authenticated user.
+- Socket connections are protected by the same HTTP-only access cookie.
+- Direct chat APIs verify conversation participant access.
+- Group chat APIs verify conversation participant access.
+- Group management APIs require group admin access.
+- Group avatar uploads accept only JPG, PNG, and WEBP.
+- Only a message sender can unsend/delete their own message.
+- System messages cannot be deleted.
+- Read receipts are stored per message in `readBy`.
 
 ## Current Limitations
 
 - Refresh token rotation is not complete rotation; only access token rotates.
 - Redis memory fallback is only for development.
-- Socket authentication is not added yet.
 - Rate limiting is not added yet.
 - Email verification is not added yet.
 - ImageKit credentials must be configured before avatar upload/remove can work.
+- File message upload UI/API is not added yet; message schema is prepared for it.
 
 ## Verification Commands
 

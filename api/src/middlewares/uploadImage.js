@@ -29,3 +29,12 @@ export const uploadProfileImage = multer({
   },
   storage
 }).single("avatar");
+
+// Multer middleware for the optional group avatar multipart field.
+export const uploadGroupImage = multer({
+  fileFilter: imageFileFilter,
+  limits: {
+    fileSize: 5 * 1024 * 1024
+  },
+  storage
+}).single("avatar");
