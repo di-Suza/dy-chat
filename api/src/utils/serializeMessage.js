@@ -7,6 +7,16 @@ const serializeReadReceipt = (receipt) => {
   };
 };
 
+const serializeAttachment = (attachment) => {
+  return {
+    _id: attachment._id?.toString?.(),
+    kind: attachment.kind || "file",
+    mimeType: attachment.mimeType || "",
+    name: attachment.name || "",
+    size: attachment.size || 0
+  };
+};
+
 // Converts a message document into the safe frontend payload shape.
 export const serializeMessage = (message) => {
   if (!message) {
@@ -15,7 +25,7 @@ export const serializeMessage = (message) => {
 
   return {
     _id: message._id?.toString(),
-    attachments: message.attachments || [],
+    attachments: (message.attachments || []).map(serializeAttachment),
     body: message.body,
     clientTempId: message.clientTempId,
     conversation:

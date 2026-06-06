@@ -38,3 +38,11 @@ export const uploadGroupImage = multer({
   },
   storage
 }).single("avatar");
+
+// Multer middleware for private chat attachments sent with messages.
+export const uploadChatAttachment = multer({
+  limits: {
+    fileSize: 50 * 1024 * 1024
+  },
+  storage
+}).single("attachment");

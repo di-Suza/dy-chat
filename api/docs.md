@@ -19,6 +19,7 @@ The backend provides:
 - group conversations.
 - group management.
 - text messaging.
+- private image, video, audio, and file messages.
 - message read receipts.
 - message unsend/delete state.
 - realtime message, typing, seen, and presence events.
@@ -512,12 +513,16 @@ Responsibilities:
 Exports:
 
 - `sendConversationMessage({ body, clientTempId, conversationId, senderId, type })`
+- `getMessageAttachmentAccessUrl({ attachmentId, messageId, userId })`
+- `createAttachmentPayload({ file, uploadedFile })`
 - `deleteConversationMessage({ messageId, userId })`
 
 Responsibilities:
 
 - validate message body and type.
 - save messages.
+- save private attachment metadata.
+- generate signed attachment URLs after participant checks.
 - update conversation visibility and last-message metadata.
 - return serialized message payloads.
 - return per-user conversation update payloads.
@@ -705,6 +710,7 @@ Base: `/api/messages`
 
 ```txt
 POST /
+GET /:messageId/attachments/:attachmentId/url
 DELETE /:messageId
 ```
 
@@ -865,16 +871,67 @@ Body:
 }
 ```
 
+Text messages use JSON. Media/file messages use multipart form data:
+
+```txt
+conversationId=<conversation id>
+clientTempId=<client temp id>
+body=<optional caption>
+attachment=<file>
+```
+
 Optimized flow:
 
 1. Verify participant access.
 2. Emit a pending realtime message immediately.
-3. Save the message in MongoDB.
-4. Add all participants to `visibleTo`.
-5. Update conversation last-message metadata.
-6. Emit final saved message.
-7. Emit per-user conversation updates.
-8. Return saved message and current user's conversation payload.
+3. If a file is present, upload it to ImageKit as a private file with `isPrivateFile: true`.
+4. Save the message in MongoDB.
+5. Save only private attachment metadata, not a permanent public URL.
+6. Add all participants to `visibleTo`.
+7. Update conversation last-message metadata.
+8. Emit final saved message.
+9. Emit per-user conversation updates.
+10. Return saved message and current user's conversation payload.
+
+Attachment metadata stored in MongoDB:
+
+- private ImageKit path.
+- ImageKit file id.
+- original file name.
+- MIME type.
+- file size.
+- attachment kind: `image`, `video`, `audio`, or `file`.
+
+Serialized message payloads do not expose the private ImageKit path.
+
+### Get Attachment Signed URL
+
+Route: `GET /api/messages/:messageId/attachments/:attachmentId/url`
+
+Purpose:
+
+- returns a short-lived signed URL for one private attachment.
+- protects direct and group chat media using conversation participant checks.
+
+Flow:
+
+1. Authenticate current user.
+2. Load the message.
+3. Reject deleted/missing messages.
+4. Verify current user is a participant in the message conversation.
+5. Find the attachment by id.
+6. Generate a signed ImageKit URL with a short expiry.
+7. Return the signed URL.
+
+Response:
+
+```js
+{
+  status: true,
+  url,
+  expiresIn: 300
+}
+```
 
 ### Delete / Unsend Message
 
@@ -1093,6 +1150,9 @@ npm start
 - Redis should be used in production for persistent blacklist behavior.
 - Profile and group avatar uploads accept only JPG, PNG, and WEBP.
 - Avatar uploads are limited to 5MB.
+- Chat attachments are uploaded to ImageKit as private files.
+- Chat attachment URLs are generated only after participant access checks.
+- Signed attachment URLs are short-lived.
 - Uploaded files go directly from memory buffer to ImageKit.
 - User search is protected.
 - Socket connections are protected by the same access cookie.
@@ -1107,7 +1167,7 @@ npm start
 - Redis memory fallback is only for development.
 - Rate limiting is not implemented yet.
 - Email verification is not implemented yet.
-- File/image/video/audio message sending is not implemented yet, although message schema has media fields.
+- Attachment upload limit is currently 50MB per message.
 
 ## 25. Verification Commands
 

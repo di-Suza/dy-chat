@@ -278,6 +278,42 @@ The send-message flow was optimized for realtime speed:
 
 This reduces the perceived delay on production networks while keeping the database as the source of truth.
 
+### Private Media Messages
+
+Direct and group chats support private media/file messages end to end.
+
+Supported attachment kinds:
+
+- image
+- video
+- audio
+- generic file
+
+Privacy model:
+
+1. Frontend sends the selected file as multipart form data under the `attachment` field.
+2. Backend verifies the sender belongs to the conversation.
+3. Backend emits a pending message quickly so realtime UI feels responsive.
+4. Backend uploads the file to ImageKit with `isPrivateFile: true`.
+5. Backend saves only attachment metadata in MongoDB:
+   - ImageKit file id
+   - ImageKit private file path
+   - original name
+   - MIME type
+   - size
+   - attachment kind
+6. Backend does not send a permanent public file URL in message payloads.
+7. When the frontend needs to render or download the attachment, it requests a short-lived signed URL from the backend.
+8. Backend checks that the requesting user is still a participant in the conversation before generating the signed URL.
+
+Signed URL route:
+
+```txt
+GET /api/messages/:messageId/attachments/:attachmentId/url
+```
+
+The signed URL expires quickly, so if a link is leaked it only works for a short time. This is the selected balance between chat privacy and CDN performance.
+
 ### Seen/Unseen Flow
 
 - Unread count is calculated from messages not sent by the current user and not read by the current user.
@@ -501,6 +537,8 @@ Completed:
 - Seen/unseen read receipts.
 - Sidebar unread conversation count.
 - Message unsend/delete state.
+- Private ImageKit media/file messages.
+- Participant-checked signed URLs for attachments.
 - Group creation.
 - Group messaging.
 - Group leave flow.
@@ -510,6 +548,5 @@ Completed:
 
 Not added yet:
 
-- Real file/image/video/audio message sending.
 - Rate limiting.
 - Email verification.

@@ -13,7 +13,7 @@ export const sendMessageValidation = [
       throw new Error("Message text must be at most 5000 characters");
     }
 
-    if (messageType === "text" && !value.trim()) {
+    if (messageType === "text" && !value.trim() && !req.file) {
       throw new Error("Message text is required");
     }
 
@@ -30,4 +30,8 @@ export const sendMessageValidation = [
 
 export const messageIdParamValidation = [
   param("messageId").isMongoId().withMessage("Valid message id is required")
+];
+
+export const attachmentIdParamValidation = [
+  param("attachmentId").isMongoId().withMessage("Valid attachment id is required")
 ];

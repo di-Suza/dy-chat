@@ -1,8 +1,11 @@
 import {
+  createAttachmentPayload,
   deleteConversationMessage,
+  getMessageAttachmentAccessUrl,
   sendConversationMessage
 } from "../services/message.service.js";
 import { getConversationForParticipant } from "../services/conversation.service.js";
+import { uploadChatAttachmentToImageKit } from "../services/imageKit.service.js";
 import {
   emitConversationUpdated,
   emitMessageDeleted,
@@ -38,6 +41,38 @@ const createPendingMessagePayload = ({ body, clientTempId, conversationId, sende
   };
 };
 
+const getAttachmentKind = (mimeType = "") => {
+  if (mimeType.startsWith("image/")) {
+    return "image";
+  }
+
+  if (mimeType.startsWith("video/")) {
+    return "video";
+  }
+
+  if (mimeType.startsWith("audio/")) {
+    return "audio";
+  }
+
+  return "file";
+};
+
+const createPendingAttachmentPayload = (file) => {
+  if (!file) {
+    return [];
+  }
+
+  return [
+    {
+      _id: `pending-attachment-${Date.now()}`,
+      kind: getAttachmentKind(file.mimetype),
+      mimeType: file.mimetype,
+      name: file.originalname || "attachment",
+      size: file.size || 0
+    }
+  ];
+};
+
 // Emits a pending message quickly, then saves and emits the final DB-backed message.
 export const sendMessage = async (req, res) => {
   const conversation = await getConversationForParticipant({
@@ -50,8 +85,9 @@ export const sendMessage = async (req, res) => {
     clientTempId: req.body.clientTempId,
     conversationId: req.body.conversationId,
     sender: req.user,
-    type: req.body.type
+    type: req.file ? getAttachmentKind(req.file.mimetype) : req.body.type
   });
+  pendingMessage.attachments = createPendingAttachmentPayload(req.file);
 
   participantIds.forEach((participantId) => {
     emitMessageCreated({
@@ -60,12 +96,26 @@ export const sendMessage = async (req, res) => {
     });
   });
 
+  const uploadedFile = req.file
+    ? await uploadChatAttachmentToImageKit({
+        file: req.file,
+        userId: req.user._id
+      })
+    : null;
+  const attachment = req.file
+    ? createAttachmentPayload({
+        file: req.file,
+        uploadedFile
+      })
+    : null;
+
   const result = await sendConversationMessage({
+    attachment,
     body: req.body.body,
     clientTempId: req.body.clientTempId,
     conversationId: req.body.conversationId,
     senderId: req.user._id,
-    type: req.body.type
+    type: req.file ? attachment.kind : req.body.type
   });
 
   result.participantIds.forEach((participantId) => {
@@ -88,6 +138,20 @@ export const sendMessage = async (req, res) => {
     )?.conversation,
     message: result.message,
     status: true
+  });
+};
+
+// Returns a short-lived signed URL only after conversation participant access.
+export const getAttachmentAccessUrl = async (req, res) => {
+  const result = await getMessageAttachmentAccessUrl({
+    attachmentId: req.params.attachmentId,
+    messageId: req.params.messageId,
+    userId: req.user._id
+  });
+
+  res.json({
+    status: true,
+    ...result
   });
 };
 

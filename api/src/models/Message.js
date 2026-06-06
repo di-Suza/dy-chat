@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 
 const attachmentSchema = new mongoose.Schema(
   {
-    url: {
+    path: {
       type: String,
       required: true
     },
@@ -21,10 +21,12 @@ const attachmentSchema = new mongoose.Schema(
     size: {
       type: Number,
       default: 0
+    },
+    kind: {
+      type: String,
+      enum: ["image", "video", "audio", "file"],
+      default: "file"
     }
-  },
-  {
-    _id: false
   }
 );
 
