@@ -1992,6 +1992,52 @@ npm run dev:web
 npm run build:web
 ```
 
+## Production Merge Build
+
+Frontend ko backend ke saath serve karne ke liye React production build `api/views` me copy kiya gaya.
+
+Current production API URL:
+
+```env
+VITE_API_URL=/api
+```
+
+Reason:
+
+- Browser same backend origin se API calls karega.
+- Auth cookies same origin par clean kaam karengi.
+- Socket.IO client bhi same origin use karega.
+
+Build flow:
+
+```powershell
+$env:VITE_API_URL="/api"
+npm --prefix web run build
+```
+
+Then `web/dist` contents copy hue:
+
+```txt
+api/views/
+  index.html
+  assets/
+```
+
+Backend Express now serves:
+
+- `/api/*` as backend APIs.
+- `/health` as health check.
+- static React assets from `api/views`.
+- any non-API route fallback to `api/views/index.html`.
+
+Production start:
+
+```bash
+npm --prefix api start
+```
+
+Uske baad backend server hi React app + API dono serve karega.
+
 ## Current Status
 
 Initial setup complete:
@@ -2051,6 +2097,8 @@ Initial setup complete:
 - Message unsend/delete flow ready.
 - Group management modal ready.
 - Admin-only group edit/member/delete APIs ready.
+- Production frontend build copied to `api/views`.
+- API server serves React app static files.
 
 Not added yet:
 

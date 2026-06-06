@@ -204,22 +204,28 @@ Responsibilities:
 - Parse JSON bodies.
 - Parse URL encoded bodies.
 - Parse cookies.
-- Register root route.
 - Register health route.
 - Mount auth routes on `/api/auth`.
 - Mount user routes on `/api/users`.
+- Serve production React build from `api/views`.
+- Fallback non-API routes to `api/views/index.html`.
 - Mount not found handler.
 - Mount global error handler.
 
 Routes:
 
-- `GET /`
 - `GET /health`
 - `/api/auth/*`
 - `/api/users/*`
+- `/api/conversations/*`
+- `/api/messages/*`
+- frontend static assets from `/assets/*`
+- frontend routes like `/`, `/login`, `/register`, `/app`
 
 Important:
 
+- Unknown `/api/*` routes still go to the API not-found handler.
+- Non-API routes are handled by React Router through `index.html`.
 - Error handlers are mounted last.
 - `/health` is before not-found handler.
 
