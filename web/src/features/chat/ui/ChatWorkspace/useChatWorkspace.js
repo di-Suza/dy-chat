@@ -129,8 +129,11 @@ export const useChatWorkspace = () => {
   const typingStopTimeoutRef = useRef(null);
   const [draftMessage, setDraftMessage] = useState("");
   const [conversationSearch, setConversationSearch] = useState("");
-  const { data: conversationsData, isLoading: isLoadingConversations } =
-    useGetConversationsQuery();
+  const {
+    data: conversationsData,
+    isFetching: isFetchingConversations,
+    isLoading: isLoadingConversations
+  } = useGetConversationsQuery();
   const conversations = conversationsData?.conversations || [];
   const activeConversation =
     conversations.find((conversation) => conversation._id === activeConversationId) ||
@@ -264,6 +267,7 @@ export const useChatWorkspace = () => {
     getConversationStatus,
     isGroupConversation,
     isFetchingMessages,
+    isFetchingConversations,
     isLoadingConversations,
     isMessageReadByOther,
     isOtherUserOnline,

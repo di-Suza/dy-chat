@@ -2,14 +2,64 @@ import {
   deleteConversationMessage,
   sendConversationMessage
 } from "../services/message.service.js";
+import { getConversationForParticipant } from "../services/conversation.service.js";
 import {
   emitConversationUpdated,
   emitMessageDeleted,
   emitMessageCreated
 } from "../services/realtime.service.js";
+import { serializeUser } from "../utils/serializeUser.js";
 
-// Saves a message, updates conversation metadata, and emits realtime updates.
+const getParticipantIds = (conversation) => {
+  return conversation.participants.map((participant) =>
+    participant._id?.toString?.() || participant.toString()
+  );
+};
+
+const createPendingMessagePayload = ({ body, clientTempId, conversationId, sender, type }) => {
+  const createdAt = new Date().toISOString();
+
+  return {
+    _id: clientTempId || `pending-${Date.now()}`,
+    body: body?.trim?.() || "",
+    clientTempId: clientTempId || "",
+    conversation: conversationId,
+    createdAt,
+    isPending: true,
+    readBy: [
+      {
+        readAt: createdAt,
+        user: sender._id.toString()
+      }
+    ],
+    sender: serializeUser(sender),
+    type: type || "text",
+    updatedAt: createdAt
+  };
+};
+
+// Emits a pending message quickly, then saves and emits the final DB-backed message.
 export const sendMessage = async (req, res) => {
+  const conversation = await getConversationForParticipant({
+    conversationId: req.body.conversationId,
+    userId: req.user._id
+  });
+  const participantIds = getParticipantIds(conversation);
+  const pendingMessage = createPendingMessagePayload({
+    body: req.body.body,
+    clientTempId: req.body.clientTempId,
+    conversationId: req.body.conversationId,
+    sender: req.user,
+    type: req.body.type
+  });
+
+  participantIds.forEach((participantId) => {
+    emitMessageCreated({
+      message: pendingMessage,
+      userId: participantId
+    });
+  });
+
   const result = await sendConversationMessage({
     body: req.body.body,
     clientTempId: req.body.clientTempId,
